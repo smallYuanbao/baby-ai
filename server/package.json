@@ -1,243 +1,36 @@
-/**
- * @file        server/package.json
- * @module      server
- * @overview    Manifests the server package for the Baby‑AI backend — an Express‑based
- *              REST API that powers file ingestion (PDF, CSV, etc.), vector storage
- *              (ChromaDB), and LLM‑backed question answering (OpenAI).  This file sits
- *              at the root of the server lifecycle: it declares the runtime entry points,
- *              the dependency graph, and the development toolchain.
- *
- *              Lifecycle outline:
- *                1. `pnpm/npm install`   – resolve & install deps declared here.
- *                2. `npm run dev`        – start the TS dev server with hot‑reload
- *                                          (tsx watch → src/index.ts).
- *                3. `npm run build`      – type‑check & emit JS to dist/ via tsc.
- *                4. `npm run start`      – run the compiled JS in production.
- *
- * @author      baby-ai team
- * @license     UNLICENSED – private workspace
- * @since       1.0.0
- *
- * Environment variables consumed (via dotenv):
- *   PORT           – HTTP listen port                 (default: 3001)
- *   OPENAI_API_KEY – OpenAI API key                   (required)
- *   CHROMA_URL     – ChromaDB endpoint                (default: http://localhost:8000)
- *   NODE_ENV       – "development" | "production"     (affects logging verbosity)
- */
-
 {
-  /** -------------------------------------------------------------------------
-   *  Package identity
-   *  -----------------------------------------------------------------------*/
-  "name": "server",           /**< npm package name – scoped to the monorepo */
-  "version": "1.0.0",        /**< SemVer – bumped manually on breaking changes */
-  "private": true,            /**< Prevents accidental publish to a registry */
-  "type": "module",           /**< Enables ESM `import`/`export` syntax project‑wide */
-
-  /** -------------------------------------------------------------------------
-   *  Scripts  –  declared lifecycle hooks & convenience aliases
-   *  -----------------------------------------------------------------------*/
+  "name": "server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
   "scripts": {
-
-    /**
-     * predev  –  Kill any stale process lingering on port 3001 before the dev
-     *            server starts.  Failure is ignored (`|| true`) so the script
-     *            never blocks the pipeline.
-     */
     "predev": "lsof -ti:3001 | xargs kill -9 2>/dev/null || true",
-
-    /**
-     * dev  –  Start the TypeScript source directly via tsx with file‑watching.
-     *         Entry point: src/index.ts
-     *         Uses:     tsx (esbuild‑based TS runner, fast HMR substitute)
-     *         Env:      loads .env via dotenv (imported in src/index.ts)
-     */
     "dev": "tsx watch src/index.ts",
-
-    /**
-     * build  –  Run the TypeScript compiler to type‑check the project and emit
-     *           JS output into dist/.  tsconfig.json in the server root governs
-     *           compiler options (target, module resolution, strictness).
-     */
     "build": "tsc",
-
-    /**
-     * start  –  Launch the compiled production server from dist/index.js.
-     *           Prerequisite: `npm run build` must have been run first.
-     */
     "start": "node dist/index.js"
   },
-
-  /** -------------------------------------------------------------------------
-   *  Production dependencies
-   *  -----------------------------------------------------------------------*/
   "dependencies": {
-
-    /**
-     * chromadb  ^1.9.4
-     *   Purpose:  Vector‑database client for persisting document embeddings and
-     *             performing similarity searches (k‑NN).  Stores chunks of
-     *             ingested files (PDF, text, CSV) alongside their embeddings.
-     *   Default:  Connects to http://localhost:8000
-     *   Env:      CHROMA_URL
-     */
     "chromadb": "^1.9.4",
-
-    /**
-     * cors  ^2.8.5
-     *   Purpose:  Express middleware that sets CORS headers so the React dev
-     *             frontend (running on a different origin during development)
-     *             can call the API without being blocked by the browser.
-     *   Default:  Permissive in dev; should be scoped in production.
-     */
     "cors": "^2.8.5",
-
-    /**
-     * dotenv  ^16.4.5
-     *   Purpose:  Loads environment variables from a .env file into
-     *             `process.env` before any other module reads them.
-     *   Config:   Called at the very top of src/index.ts so every downstream
-     *             module sees the populated env.
-     */
     "dotenv": "^16.4.5",
-
-    /**
-     * express  ^4.21.0
-     *   Purpose:  HTTP server framework.  The entire REST API is built on
-     *             Express – route definitions, middleware pipeline, error
-     *             handlers, and the final `app.listen()` call.
-     *   Port:     process.env.PORT || 3001
-     */
     "express": "^4.21.0",
-
-    /**
-     * iconv-lite  ^0.7.2
-     *   Purpose:  Character‑encoding conversion library.  Used during file
-     *             ingestion to handle non‑UTF‑8 encodings (e.g. Shift‑JIS CSV
-     *             files) before text extraction.
-     */
     "iconv-lite": "^0.7.2",
-
-    /**
-     * multer  ^1.4.5-lts.1
-     *   Purpose:  Multipart/form‑data parsing middleware for Express.  Handles
-     *             file uploads (PDF, CSV, etc.) posted from the frontend.
-     *             Uploaded files are staged in memory or on disk before the
-     *             ingestion pipeline processes them.
-     */
     "multer": "^1.4.5-lts.1",
-
-    /**
-     * openai  ^4.67.0
-     *   Purpose:  Official OpenAI Node.js SDK.  Used for:
-     *               1. Generating embeddings (text-embedding-3‑small) for ChromaDB.
-     *               2. Chat completions for the Q&A / RAG pipeline.
-     *   Env:      OPENAI_API_KEY  (required)
-     *   Default model for embeddings: text-embedding-3-small
-     */
     "openai": "^4.67.0",
-
-    /**
-     * pdf-parse  ^1.1.1
-     *   Purpose:  Extracts raw text from PDF buffers.  Used in the ingestion
-     *             pipeline when a user uploads a .pdf file – the extracted text
-     *             is then chunked, embedded, and stored in ChromaDB.
-     */
     "pdf-parse": "^1.1.1",
-
-    /**
-     * pino  ^9.4.0
-     *   Purpose:  Structured JSON logger with extremely low overhead.  Replaces
-     *             `console.log` throughout the server.  In development,
-     *             pino‑pretty prettifies the output; in production, raw JSON
-     *             lines are emitted for log aggregation systems.
-     *   Env:      NODE_ENV  (controls whether pino‑pretty is attached)
-     */
     "pino": "^9.4.0",
-
-    /**
-     * pino-pretty  ^11.2.2
-     *   Purpose:  Human‑readable prettifier transport for pino.  Only loaded in
-     *             development (`NODE_ENV !== 'production'`) to avoid the CPU
-     *             cost of pretty‑printing in production.
-     */
     "pino-pretty": "^11.2.2",
-
-    /**
-     * uuid  ^10.0.0
-     *   Purpose:  Generates RFC 9562 UUIDs (v4 by default).  Every uploaded
-     *             file, ingestion batch, and chat session is assigned a unique
-     *             identifier for tracing through logs and the database.
-     */
     "uuid": "^10.0.0",
-
-    /**
-     * zod  ^3.23.8
-     *   Purpose:  Schema declaration & validation library (TypeScript‑first).
-     *             Every API endpoint validates its request body / query params
-     *             against a Zod schema before processing, providing early,
-     *             descriptive 400 responses for malformed input.
-     */
     "zod": "^3.23.8"
   },
-
-  /** -------------------------------------------------------------------------
-   *  Development dependencies  –  only needed during development & CI
-   *  -----------------------------------------------------------------------*/
   "devDependencies": {
-
-    /**
-     * @types/cors  ^2.8.17
-     *   Purpose:  TypeScript type definitions for the `cors` middleware.
-     */
     "@types/cors": "^2.8.17",
-
-    /**
-     * @types/express  ^4.17.21
-     *   Purpose:  TypeScript type definitions for Express (Request, Response,
-     *             NextFunction, etc.).
-     */
     "@types/express": "^4.17.21",
-
-    /**
-     * @types/multer  ^1.4.12
-     *   Purpose:  TypeScript type definitions for multer.
-     */
     "@types/multer": "^1.4.12",
-
-    /**
-     * @types/node  ^22.7.0
-     *   Purpose:  TypeScript type definitions for Node.js built‑in modules
-     *             (fs, path, buffer, process, etc.).
-     */
     "@types/node": "^22.7.0",
-
-    /**
-     * @types/pdf-parse  ^1.1.4
-     *   Purpose:  TypeScript type definitions for pdf‑parse.
-     */
     "@types/pdf-parse": "^1.1.4",
-
-    /**
-     * @types/uuid  ^10.0.0
-     *   Purpose:  TypeScript type definitions for the `uuid` package.
-     */
     "@types/uuid": "^10.0.0",
-
-    /**
-     * tsx  ^4.19.0
-     *   Purpose:  esbuild‑powered TypeScript executor.  Used by the `dev`
-     *             script (`tsx watch`) for fast, compile‑free execution with
-     *             file watching.  Faster than ts‑node for iterative development.
-     */
     "tsx": "^4.19.0",
-
-    /**
-     * typescript  ^5.6.0
-     *   Purpose:  The TypeScript compiler (`tsc`).  Used by the `build` script
-     *             for type‑checking and transpilation to JavaScript.
-     *   Config:   tsconfig.json (in the server directory)
-     */
     "typescript": "^5.6.0"
   }
 }
