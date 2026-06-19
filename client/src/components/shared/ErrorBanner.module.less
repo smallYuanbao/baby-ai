@@ -1,0 +1,89 @@
+/**
+ * ErrorBanner – shared error-banner component styles.
+ *
+ * Colours follow a red/danger palette (red-50 background, red-700 text).
+ * All spacing and sizing tokens come from variables.less so the banner
+ * adapts consistently when the design system is updated.
+ */
+
+@import '../../styles/variables.less';
+
+/* ------------------------------------------------------------------ */
+/*  Banner container                                                    */
+/* ------------------------------------------------------------------ */
+
+.banner {
+  // Horizontal margin keeps the banner aligned with surrounding content;
+  // bottom margin separates it from the element below.
+  margin: 0 @space-4 @space-3;
+  padding: @space-3;
+  background: @red-50;
+  border: 1px solid #fecaca; // red-200 equivalent
+  border-radius: @radius-2xl;
+  display: flex;
+  align-items: center;
+  gap: @space-3;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Icon                                                               */
+/* ------------------------------------------------------------------ */
+
+.icon {
+  font-size: @text-lg;
+  flex-shrink: 0; // never collapse the icon when space is tight
+}
+
+/* ------------------------------------------------------------------ */
+/*  Message text                                                       */
+/* ------------------------------------------------------------------ */
+
+.message {
+  flex: 1; // fill remaining horizontal space so buttons stay at the end
+  font-size: @text-sm;
+  color: #b91c1c; // red-700 — high-contrast on the red-50 background
+}
+
+/* ------------------------------------------------------------------ */
+/*  Action buttons area                                                */
+/* ------------------------------------------------------------------ */
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: @space-1;
+  flex-shrink: 0; // keep buttons visible; let the message text wrap instead
+}
+
+/* ------------------------------------------------------------------ */
+/*  Retry button                                                       */
+/* ------------------------------------------------------------------ */
+
+.retryButton {
+  padding: @space-1 @space-3;
+  font-size: @text-xs;
+  font-weight: 600;
+  color: #b91c1c; // red-700
+  background: #fee2e2; // red-100
+  border-radius: @radius-xl;
+  transition: color, background-color, border-color @transition-base;
+
+  &:hover {
+    background: #fecaca; // red-200 — slightly darker on hover
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Dismiss button                                                     */
+/* ------------------------------------------------------------------ */
+
+.dismissButton {
+  padding: @space-1 @space-2;
+  font-size: @text-sm;
+  color: #f87171; // red-400 — muted so it does not compete with "retry"
+  transition: color, background-color, border-color @transition-base;
+
+  &:hover {
+    color: #dc2626; // red-600 — stronger feedback on hover
+  }
+}

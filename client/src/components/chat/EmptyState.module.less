@@ -1,0 +1,117 @@
+@import '../../styles/variables.less';
+
+// =========================================================================
+// EmptyState.module.less
+//
+// Styles for the EmptyState component — the placeholder screen shown when
+// no conversation exists yet. Displays branding, a prompt heading, and a
+// clickable set of icebreaker suggestions to start a new chat.
+// =========================================================================
+
+// -------------------------------------------------------------------
+// Layout wrapper — fills available space, centers content vertically
+// -------------------------------------------------------------------
+.wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+  padding-top: 2.5rem;  // extra top-padding to optically compensate for the text-heavy lower half
+  padding-bottom: 2.5rem;
+}
+
+// -------------------------------------------------------------------
+// Logo
+// -------------------------------------------------------------------
+.logoContainer {
+  width: 6rem;
+  height: 6rem;
+  border-radius: 1.5rem;   // 24px — soft "squircle" rounding, friendlier than a circle for a brand-mark container
+  background: @primary-100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);  // extremely subtle lift — 1px shadow at 5 % opacity
+}
+
+.logoIcon {
+  width: 4rem;
+  height: 4rem;
+}
+
+// -------------------------------------------------------------------
+// Header text
+// -------------------------------------------------------------------
+.heading {
+  font-size: 1.25rem;   // 20px
+  font-weight: 700;
+  color: @gray-800;
+  margin-bottom: 0.5rem;
+}
+
+.subtitle {
+  font-size: 0.875rem;  // 14px
+  color: @gray-500;
+  margin-bottom: 2rem;
+  text-align: center;
+  max-width: 20rem;      // constrains line-length for readability on wider viewports
+}
+
+// -------------------------------------------------------------------
+// Suggestion chips
+// -------------------------------------------------------------------
+.suggestionsWrapper {
+  width: 100%;
+  max-width: 24rem;      // 384px — keeps the grid from stretching too wide on desktop
+}
+
+.suggestionsLabel {
+  font-size: 0.75rem;    // 12px — deliberately small so it reads as a hint, not a heading
+  color: @gray-400;
+  margin-bottom: 0.75rem;
+  text-align: center;
+}
+
+// 2-column grid for side-by-side suggestion buttons
+.suggestionsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+.suggestionButton {
+  text-align: left;       // left-align so multi-line text reads naturally
+  padding: 0.75rem;
+  background: @surface-light;
+  border-radius: 1.25rem; // 20px — pill-like but slightly squared-off
+  border: 1px solid rgba(255, 237, 213, 0.5);  // warm tinted border that matches the "baby" palette, 50 % translucent against any background
+  transition: all 200ms;   // quick but perceptible hover transition
+  cursor: pointer;
+
+  &:hover {
+    background: @primary-50;
+    border-color: @primary-200;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+
+    // Darken suggestion text on hover so it remains readable against the
+    // lighter primary background.
+    .suggestionText {
+      color: @gray-800;
+    }
+  }
+}
+
+.suggestionIcon {
+  font-size: 1.125rem;  // 18px
+}
+
+.suggestionText {
+  font-size: 0.75rem;   // 12px
+  color: @gray-600;
+  margin-top: 0.375rem; // 6px — tight separation from the icon above
+  line-height: 1.625;   // ~19.5px — relaxed leading for multi-line suggestion text
+}

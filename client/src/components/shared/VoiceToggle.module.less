@@ -1,0 +1,66 @@
+// =============================================================================
+// VoiceToggle.module.less
+// Styles for the VoiceToggle component — a circular button that toggles
+// between idle and listening (voice recording) states.
+// =============================================================================
+
+@import '../../styles/variables.less';
+
+// ---------------------------------------------------------------------------
+// Base button
+// ---------------------------------------------------------------------------
+.button {
+  width: @space-10;
+  height: @space-10;
+  border-radius: @radius-2xl;          // fully rounded circle
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all @transition-base;
+  // Accessibility: ensure touch target is at least 44×44px
+  min-width: 44px;
+  min-height: 44px;
+  cursor: pointer;
+
+  // Dim and disable interaction when the button is not usable
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Listening state — active voice recording
+// ---------------------------------------------------------------------------
+.listening {
+  background: @red-500;
+  color: @white;
+  // Red shadow glow to visually indicate active recording
+  box-shadow:
+    0 10px 15px -3px rgba(254, 202, 202, 0.4),
+    0 4px 6px -4px rgba(254, 202, 202, 0.3);
+}
+
+// ---------------------------------------------------------------------------
+// Idle state — default, not recording
+// ---------------------------------------------------------------------------
+.idle {
+  color: @gray-400;
+
+  &:hover {
+    color: @primary-500;
+    background: @primary-50;
+  }
+
+  &:active {
+    background: @primary-100;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Microphone / waveform icon inside the button
+// ---------------------------------------------------------------------------
+.icon {
+  width: @space-5;
+  height: @space-5;
+}

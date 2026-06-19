@@ -1,0 +1,89 @@
+/*
+ * package.json — Root workspace configuration for the baby-ai project.
+ *
+ * PURPOSE:
+ *   This is the root-level package descriptor and monorepo orchestrator for the
+ *   baby-ai application, a RAG-powered parenting assistant (育儿 AI 聊天应用).
+ *   It defines the npm workspaces (client + server), shared dev tooling, and
+ *   convenience scripts that coordinate builds and dev servers across packages.
+ *   No runtime application code lives at this level — it serves solely as the
+ *   monorepo coordination point.
+ *
+ * ROLE IN THE PROJECT:
+ *   - Declares the two sub-packages ("client" and "server") as npm workspaces,
+ *     enabling shared dependency hoisting and cross-package script execution
+ *     via the `-w <workspace>` flag.
+ *   - Provides top-level `dev` and `build` scripts that orchestrate both
+ *     packages, so a single `npm run dev` starts the full stack.
+ *   - Houses shared devDependencies (concurrently, less) that are used
+ *     across workspaces or at the root level to coordinate tasks.
+ */
+{
+  /*
+   * Package identity. "private": true prevents accidental publication to npm,
+   * which is standard practice for monorepo roots and private applications.
+   */
+  "name": "baby-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "育儿 AI 聊天应用 - RAG-powered parenting assistant",
+
+  /*
+   * WORKSPACES: Declares the monorepo structure. Each entry is a sub-directory
+   * containing its own package.json. npm/yarn will hoist shared dependencies
+   * to the root node_modules when possible, and the -w flag in scripts targets
+   * these workspace names.
+   *   - "client": Frontend application (React/Vite-based SPA).
+   *   - "server": Backend API server (Node.js/Express with RAG logic).
+   */
+  "workspaces": [
+    "client",
+    "server"
+  ],
+
+  /*
+   * SCRIPTS: Top-level convenience commands.
+   *
+   *   dev:client   — Starts only the client dev server (Vite HMR) in the client workspace.
+   *   dev:server   — Starts only the backend dev server (nodemon/ts-node) in the server workspace.
+   *   dev          — Runs both client and server concurrently for full-stack local development.
+   *   build:client — Production build of the client (Vite bundle output).
+   *   build:server — Compiles/transpiles the server (TypeScript → JavaScript).
+   *   build        — Runs server build first, then client build (order matters if client
+   *                   references server output, e.g. for type sharing or SSR).
+   *
+   * The -w flag is shorthand for --workspace, targeting the package name
+   * declared in the sub-package's package.json, not the directory name
+   * (though they happen to match here).
+   */
+  "scripts": {
+    "dev:client": "npm run dev -w client",
+    "dev:server": "npm run dev -w server",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "build:client": "npm run build -w client",
+    "build:server": "npm run build -w server",
+    "build": "npm run build:server && npm run build:client"
+  },
+
+  /*
+   * DEV DEPENDENCIES: Tooling used only at development/build time, shared
+   * across the monorepo.
+   *
+   *   concurrently — Runs multiple npm scripts in parallel (e.g., client + server dev servers).
+   *                  ^8.x is the latest major as of project setup.
+   *   less         — CSS preprocessor used by the client build pipeline. Hoisted to
+   *                  the root so all workspaces share one version.
+   */
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "less": "^4.6.6"
+  },
+
+  /*
+   * RUNTIME DEPENDENCIES: Intentionally empty at the root level. All runtime
+   * dependencies belong in the individual workspace package.json files
+   * (client/package.json and server/package.json). The root only coordinates;
+   * it does not ship any runtime code.
+   */
+  "dependencies": {}
+}

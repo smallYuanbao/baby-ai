@@ -1,0 +1,40 @@
+20
+# =============================================================================
+# .nvmrc — Node Version Manager Runtime Configuration
+# =============================================================================
+#
+# Purpose:
+#   Declares the Node.js version that this project targets. NVM (Node Version
+#   Manager) reads this file when you run `nvm use` or `nvm install` from this
+#   directory, automatically switching your shell to the specified version.
+#   This ensures every developer (and CI/CD pipeline) builds and runs the
+#   project with the same major version of Node, avoiding subtle bugs caused
+#   by runtime differences.
+#
+#   Tools that honour .nvmrc automatically:
+#     - nvm (nvm use / nvm install)
+#     - fnm (fast Node manager)
+#     - nodenv (via nodenv-nvmrc plugin)
+#     - avn (automatic version switching)
+#     - Many CI platforms (Netlify, Vercel, Render, etc.)
+#     - Docker build scripts (common convention)
+#
+# Value: 20
+#   This pins the project to Node.js 20.x (Iron LTS). Node 20 was promoted to
+#   LTS on 2023-10-24 and will receive security updates until 2026-04-30.
+#   Using a bare major version (20 rather than 20.x or 20.18.0) lets nvm
+#   resolve the latest available 20.x release, balancing stability with the
+#   convenience of picking up patch-level fixes automatically.
+#
+#   Acceptable alternative values (if upgrading later):
+#     - "22"          → Current LTS (active until 2027-04-30)
+#     - "lts/*"       → Latest LTS release (alias managed by nvm)
+#     - "lts/iron"    → Explicitly the Iron LTS codename
+#     - "20.18.0"     → A specific patch version (CI hermetic builds)
+#     - "node"        → Latest stable release (avoid — too loose for teams)
+#
+# Related files:
+#   - package.json  → engines.node field should match or constrain this version
+#   - .node-version → alternative file read by fnm/nodenv (this project uses
+#                      .nvmrc instead; having both can cause conflicts)
+

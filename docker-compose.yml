@@ -1,0 +1,169 @@
+# =============================================================================
+# docker-compose.yml — Infrastructure Services for baby-ai
+# =============================================================================
+#
+# This file defines the containerised infrastructure that the baby-ai application
+# depends on at runtime.  It is NOT the application itself; it is the "backend
+# plumbing" that the app connects to:
+#
+#   1. ChromaDB  — vector database (stores and queries text embeddings).
+#   2. Ollama    — local LLM server (runs the bge-m3 embedding model).
+#
+# Role in the project:
+#   - Start these services BEFORE running the baby-ai application (e.g. with
+#     `docker compose up -d`).
+#   - The application reads connection parameters from its .env file
+#     (CHROMA_HOST, CHROMA_PORT, OLLAMA_HOST, etc.) and talks to these
+#     containers over the mapped ports.
+#
+# Usage:
+#   docker compose up -d          # start both services in the background
+#   docker compose down           # stop and remove the containers
+#   docker compose logs -f        # follow logs from both services
+# =============================================================================
+
+version: '3.8'
+
+# ---------------------------------------------------------------------------
+# SERVICES
+# ---------------------------------------------------------------------------
+services:
+
+  # =========================================================================
+  # ChromaDB — Vector Database
+  # =========================================================================
+  # ChromaDB is an open-source embedding database.  baby-ai uses it to:
+  #   - Store document chunks and their vector embeddings.
+  #   - Perform similarity search over those embeddings at query time.
+  #   - Persist the index so data survives container restarts.
+  #
+  # Network:  exposed on host port 8000 (default ChromaDB HTTP API port).
+  # Storage:  persisted in a Docker named volume (`chroma_data`).
+  # =========================================================================
+  chroma:
+    # Official ChromaDB image from Docker Hub.
+    # Tag `latest` tracks the most recent stable release.
+    image: chromadb/chroma:latest
+
+    # Fixed container name so other scripts / the app can reference it
+    # reliably (e.g. in connection strings or docker network aliases).
+    container_name: baby-ai-chroma
+
+    # Port mapping:  host:container
+    # ChromaDB listens on port 8000 inside the container; mapping it to the
+    # same port on the host makes the default connection URL
+    # `http://localhost:8000` work out of the box.
+    ports:
+      - "8000:8000"
+
+    # Mount the named volume at the ChromaDB persistence directory.
+    # Without this, all indexed data is lost when the container is removed.
+    volumes:
+      - chroma_data:/chroma/chroma
+
+    # Environment variables passed to the ChromaDB process.
+    environment:
+      # Enable on-disk persistence.  When TRUE, ChromaDB writes its index to
+      # the volume path above.  Set to FALSE only for ephemeral / test runs.
+      - IS_PERSISTENT=TRUE
+
+      # Disable telemetry collection.  ChromaDB sends anonymous usage stats by
+      # default; setting this to FALSE opts out completely.
+      - ANONYMIZED_TELEMETRY=FALSE
+
+    # Restart policy:
+    #   unless-stopped — the container restarts automatically if it crashes or
+    #   the Docker daemon restarts, but does NOT restart if you explicitly
+    #   stop it with `docker compose stop`.  Good balance for development.
+    restart: unless-stopped
+
+    # Healthcheck:  polls the ChromaDB heartbeat endpoint every 10 seconds.
+    # Docker marks the container as "healthy" after 5 consecutive successes
+    # and "unhealthy" after 5 consecutive failures.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s   # How often to run the check.
+      timeout: 5s      # Max time to wait for a response.
+      retries: 5       # Consecutive failures before marking unhealthy.
+
+  # =========================================================================
+  # Ollama — Local LLM / Embedding Model Server
+  # =========================================================================
+  # Ollama is a self-hosted LLM runner.  baby-ai uses it to:
+  #   - Serve the bge-m3 embedding model (multilingual, 1024-dim vectors).
+  #   - Generate embeddings on-the-fly via Ollama's REST API.
+  #
+  # The bge-m3 model is pulled automatically when the container starts for the
+  # first time (see `command` below).  On subsequent starts the model is
+  # already cached in the persistent volume, so the pull is a no-op.
+  #
+  # Network:  exposed on host port 11434 (default Ollama API port).
+  # Storage:  persisted in a Docker named volume (`ollama_data`).
+  # =========================================================================
+  ollama:
+    # Official Ollama image from Docker Hub.
+    image: ollama/ollama:latest
+
+    # Fixed container name for reliable referencing.
+    container_name: baby-ai-ollama
+
+    # Port mapping:  host:container
+    # Ollama's API listens on port 11434; the app connects to
+    # `http://localhost:11434` by default.
+    ports:
+      - "11434:11434"
+
+    # Mount the named volume at Ollama's model storage directory.
+    # This preserves downloaded models (bge-m3, etc.) across container
+    # rebuilds so you don't have to re-download them every time.
+    volumes:
+      - ollama_data:/root/.ollama
+
+    # Restart policy — same reasoning as ChromaDB above.
+    restart: unless-stopped
+
+    # Healthcheck:  runs `ollama list` inside the container to verify the
+    # Ollama daemon is responsive.  This is a lightweight command that
+    # succeeds as long as the server is running, regardless of which models
+    # are loaded.
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+    # -------------------------------------------------------------------
+    # Startup sequence (entrypoint + command)
+    # -------------------------------------------------------------------
+    # Ollama's default entrypoint runs `ollama serve` in the foreground.
+    # We override it with a shell script that:
+    #   1. Starts the Ollama server in the background.
+    #   2. Waits 5 seconds for the server to be ready.
+    #   3. Pulls the bge-m3 embedding model (no-op if already cached).
+    #   4. `wait` keeps the container alive by waiting on the background
+    #      server process.
+    # -------------------------------------------------------------------
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        ollama serve &
+        sleep 5
+        ollama pull bge-m3
+        wait
+
+# ---------------------------------------------------------------------------
+# VOLUMES
+# ---------------------------------------------------------------------------
+# Named volumes are managed by Docker and stored in
+# /var/lib/docker/volumes/ on Linux (or the Docker VM on macOS).
+# They outlive individual containers, so data persists across
+# `docker compose down` (without `-v`) and image updates.
+# ---------------------------------------------------------------------------
+volumes:
+  # Stores ChromaDB's persisted index and metadata.
+  chroma_data:
+    driver: local
+
+  # Stores Ollama's downloaded model files (bge-m3, any future models).
+  ollama_data:
+    driver: local

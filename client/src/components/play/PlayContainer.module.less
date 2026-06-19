@@ -1,0 +1,33 @@
+// =============================================================================
+// PlayContainer.module.less
+//
+// Styles for the PlayContainer component — the main interactive play area
+// where the child interacts with the AI mascot.  This layout reserves space for
+// the chat/input area below and keeps the mascot centred at the top.
+//
+// Dependencies: @import '../../styles/variables.less' for shared design tokens
+//               (colours, breakpoints, spacing scale, etc.).
+// =============================================================================
+
+@import '../../styles/variables.less';
+
+// ---------------------------------------------------------------------------
+// Root wrapper — fills available height and establishes a vertical flex layout
+// ---------------------------------------------------------------------------
+.wrapper {
+  flex: 1;                       // Grow to consume remaining space inside parent
+  display: flex;
+  flex-direction: column;        // Stack mascot (top) and chat (bottom) vertically
+  overflow: hidden;              // Prevent scroll leakage into sibling panels
+}
+
+// ---------------------------------------------------------------------------
+// Mascot area — non-scrollable zone that centres the animated character
+// ---------------------------------------------------------------------------
+.mascotArea {
+  flex-shrink: 0;                // Never allow the mascot to be squeezed by chat area
+  display: flex;
+  justify-content: center;       // Centre mascot horizontally
+  padding-top: 1rem;             // Breathing room from the top edge
+  padding-bottom: 0.5rem;        // Visual separation from the input area below
+}

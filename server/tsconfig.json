@@ -1,0 +1,72 @@
+{
+  // ============================================================================
+  // @file        server/tsconfig.json
+  // @module      Server TypeScript Build Configuration
+  // @lifecycle   Build-time — processed by `tsc` before the server process starts.
+  //              Not loaded at runtime; defines how src/ is compiled into dist/.
+  //
+  // This file is the TypeScript compiler configuration for the **server-side
+  // Node.js process** in the baby-ai monorepo.  It extends the repository-wide
+  // base config (tsconfig.base.json) and overlays server-specific settings:
+  //   - ESNext modules compatible with a modern Node.js bundler
+  //   - Node.js type declarations (no DOM / browser globals)
+  //   - Strict source-root isolation (src/ → dist/)
+  //
+  // This file is **not** used for client/frontend builds; those have their own
+  // tsconfig files.  If you need to add a shared compiler flag, prefer editing
+  // tsconfig.base.json so all packages inherit it.
+  // ============================================================================
+
+  // Inherit all compiler defaults and strictness flags from the repo root.
+  // See ../tsconfig.base.json for: target, lib, strict, paths, etc.
+  "extends": "../tsconfig.base.json",
+
+  "compilerOptions": {
+    // ---- Module System -------------------------------------------------------
+    // Emit ESNext-flavoured ES modules.  The actual Node.js loader (e.g. tsx,
+    // ts-node, or a bundler) handles resolution and transformation.
+    // Default (when absent): "commonjs".  Override: TS_MODULE env var is NOT
+    // read by tsc; change the value here or via a CI-specific tsconfig.
+    "module": "ESNext",
+
+    // Use "bundler" resolution so tsc understands package.json "exports" maps,
+    // subpath imports, and extensionless relative paths exactly like Vite/esbuild.
+    // Default: "classic" (very old) or "node" (without exports support).
+    // Override: not driven by an env var — keep in sync with the bundler config.
+    "moduleResolution": "bundler",
+
+    // ---- Output Layout -------------------------------------------------------
+    // Compile .ts files from src/ → .js + .d.ts into dist/.
+    // Default: none — required field for a composite/non-composite project.
+    "outDir": "./dist",
+
+    // Source root for the project.  tsc mirrors the src/ directory structure
+    // inside outDir.  Default: the directory containing tsconfig.json.
+    "rootDir": "./src",
+
+    // Generate .d.ts declaration files alongside compiled .js.  Needed so that
+    // other workspace packages (e.g. a client) can import this server package
+    // with full type safety.
+    // Default: false.  Override: set TS_DECLARATION=false to suppress (rare).
+    "declaration": true,
+
+    // ---- Type Declarations ---------------------------------------------------
+    // Only include @types/node — prevents accidental usage of DOM / browser
+    // APIs (window, document, etc.) in server code.
+    // Default (when absent): all @types/* in node_modules are auto-included.
+    "types": ["node"]
+  },
+
+  // ---- File Scope ------------------------------------------------------------
+  // Compile everything under src/.  Keep the pattern explicit so test fixtures
+  // and migration scripts are included by default (exclude them below if needed).
+  // Default: all .ts/.tsx/.d.ts files under rootDir.
+  "include": ["src/**/*.ts"],
+
+  // Exclude third-party code and the compiler's own output.  Without this,
+  // tsc could pick up stale .d.ts files from a previous build and report
+  // duplicate-identifier errors.
+  // node_modules is excluded by default, but listing it explicitly is harmless
+  // and self-documenting.
+  "exclude": ["node_modules", "dist"]
+}

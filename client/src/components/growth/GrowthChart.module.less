@@ -1,0 +1,130 @@
+// =============================================================================
+// GrowthChart.module.less
+//
+// Styles for the GrowthChart component, which renders a line/area chart
+// showing a child's growth data (height, weight, etc.) over time against
+// percentile reference curves.
+//
+// Depends on shared design tokens from variables.less (colors, spacing).
+// =============================================================================
+
+@import '../../styles/variables.less';
+
+// ---------------------------------------------------------------------------
+// Layout wrapper
+// ---------------------------------------------------------------------------
+
+.wrapper {
+  padding: 1rem;
+}
+
+// ---------------------------------------------------------------------------
+// Metric toggle — segmented control for switching between height/weight/etc.
+// ---------------------------------------------------------------------------
+
+.metricToggle {
+  display: flex;
+  gap: 0.25rem;
+  background: @gray-50;
+  border-radius: 1rem;            // pill-shaped outer container
+  padding: 0.125rem;
+  margin-bottom: 1rem;
+}
+
+.metricTab {
+  flex: 1;
+  padding: 0.375rem 0;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 0.5rem;          // inner rounded tabs
+  transition: all 200ms;          // smooth toggle between active/inactive
+
+  // Active tab appears as a raised white pill
+  &.active {
+    background: @white;
+    color: @primary-600;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  }
+
+  // Inactive tab is subtle, with a hover affordance
+  &.inactive {
+    color: @gray-400;
+
+    &:hover {
+      color: @gray-600;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Loading state — centered spinner placeholder area
+// ---------------------------------------------------------------------------
+
+.loadingState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 16rem;                  // fixed height prevents layout jump
+  color: @gray-400;
+  font-size: 0.875rem;
+}
+
+// ---------------------------------------------------------------------------
+// Empty state — shown when no growth data is available yet
+// ---------------------------------------------------------------------------
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 16rem;                  // same fixed height as loading state
+  color: @gray-400;
+  font-size: 0.875rem;
+}
+
+.emptyIcon {
+  font-size: 1.875rem;
+  margin-bottom: 0.5rem;
+}
+
+.emptyHint {
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+// ---------------------------------------------------------------------------
+// Chart area
+// ---------------------------------------------------------------------------
+
+// Wrapper for the entire chart section (header + container)
+.chartSection {
+  // container for chart area
+}
+
+// Header row: title on the left, data-point count on the right
+.chartHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.chartTitle {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: @gray-700;
+}
+
+.chartDataPoints {
+  font-size: 0.75rem;
+  color: @gray-400;
+}
+
+// Chart card — white rounded container with a subtle primary border
+.chartContainer {
+  background: @white;
+  border-radius: 1.25rem;         // slightly larger radius than inner elements
+  border: 1px solid @primary-50;
+  padding: 0.75rem;
+}

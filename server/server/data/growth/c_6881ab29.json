@@ -1,0 +1,24 @@
+{
+  "childId": "c_6881ab29",
+  "name": "小元宝",
+  "birthDate": "2026-04-14",
+  "gender": "male",
+  "records": [
+    {
+      "id": "rec_1284e32d",
+      "date": "2026-06-15",
+      "height": 65,
+      "weight": 6.2,
+      "headCircumference": 20,
+      "feeding": {
+        "type": "mixed",
+        "amount": 800,
+        "unit": "ml"
+      },
+      "diapers": 8,
+      "createdAt": "2026-06-15T10:04:25.174Z"
+    }
+  ],
+  "createdAt": "2026-06-15T10:03:51.141Z",
+  "updatedAt": "2026-06-15T10:04:25.174Z"
+}

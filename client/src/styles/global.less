@@ -1,0 +1,294 @@
+/**
+ * global.less — Application-wide base styles and shared utilities
+ *
+ * @file        Global stylesheet for the baby-ai client application.
+ * @description Serves as the foundation layer of the CSS architecture:
+ *              - Imports design tokens (variables.less) for consistent theming.
+ *              - Defines base element resets and global typography defaults.
+ *              - Provides custom scrollbar styling for Webkit browsers.
+ *              - Declares reusable @keyframes animations (fade, slide, bounce).
+ *              - Exposes utility classes for animation application and text balancing.
+ *              - Contains the shared .markdown-content class used by react-markdown
+ *                rendered output throughout the app.
+ *
+ *              This file is loaded once at app startup and cascades everywhere.
+ *              It should NOT contain component-specific styles — those belong in
+ *              co-located .less files or CSS modules.
+ */
+
+@import './variables.less';
+
+// ============================================================
+//  Base — Global resets and default element styling
+// ============================================================
+
+// Remove the default tap highlight on touch devices (iOS/Android).
+// This prevents a semi-transparent overlay from appearing on tapped elements.
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+// Enable smooth scrolling for anchor-link navigation within the page.
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  // Use the design-token surface color for a consistent light background.
+  background: @surface-light;
+
+  // Improve text rendering on macOS (subpixel antialiasing) and
+  // on macOS Firefox (grayscale antialiasing) respectively.
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  color: @gray-800;
+  line-height: 1.625; // ~26px at default 16px font-size — comfortable reading rhythm
+  font-family: @font-sans;
+
+  // Enable kerning and standard ligatures for cleaner typography.
+  font-feature-settings: 'kern' 1, 'liga' 1;
+
+  // Zero-out browser-default margin so layout is fully controlled by the app.
+  margin: 0;
+}
+
+// ============================================================
+//  Scrollbar — Custom Webkit scrollbar styling
+// ============================================================
+//  Replaces the default browser scrollbar with a subtle, branded version.
+//  Only applies in Webkit/Blink browsers (Chrome, Edge, Safari, Opera).
+//  Firefox uses `scrollbar-width` / `scrollbar-color` instead (not set here).
+
+// The scrollbar track (the gutter the thumb slides within) — invisible.
+::-webkit-scrollbar {
+  width: 6px; // narrow scrollbar to stay unobtrusive
+}
+
+// The track background — fully transparent so content shows through.
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+// The draggable thumb — tinted with the primary palette.
+::-webkit-scrollbar-thumb {
+  background: @primary-200;
+  border-radius: @radius-full; // pill-shaped thumb for a soft look
+}
+
+// Thumb becomes slightly more saturated on hover for affordance.
+::-webkit-scrollbar-thumb:hover {
+  background: @primary-300;
+}
+
+// ============================================================
+//  Animations — Reusable @keyframes and utility classes
+// ============================================================
+//  These keyframes are declared once and used throughout the app via the
+//  utility classes below. Keeping them in global.less avoids duplicate
+//  declarations across components.
+
+// Three-dot "typing indicator" bounce pattern.
+// Each dot animates with a staggered animation-delay set inline.
+// - Dots sit at scale(0) / opacity 0.3 (barely visible) most of the cycle.
+// - At 40% they pop to full size/opacity, creating a wave effect.
+@keyframes bounce-dot {
+  0%, 80%, 100% {
+    transform: scale(0);
+    opacity: 0.3;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+// Simple opacity transition — used for appearing elements (e.g. chat messages, tooltips).
+@keyframes fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+// Slide + fade entrance from below — used for modals, dropdowns, and
+// elements that should "rise" into view.
+@keyframes slide-up {
+  0% {
+    opacity: 0;
+    transform: translateY(10px); // start 10px below final position
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// --- Animation Utility Classes ---
+// Apply these classes to any element to trigger the corresponding animation.
+
+.animate-fade-in {
+  animation: fade-in @transition-slow ease-out; // slow deceleration for a smooth entrance
+}
+
+.animate-slide-up {
+  animation: slide-up @transition-slow ease-out;
+}
+
+.animate-bounce-dot {
+  // 1.4s per cycle, looping forever, with both fill modes so the element
+  // holds the start state before the animation begins and the end state after.
+  animation: bounce-dot 1.4s infinite ease-in-out both;
+}
+
+// ============================================================
+//  Utilities — Single-purpose helper classes
+// ============================================================
+
+// Use CSS `text-wrap: balance` to evenly distribute text across lines,
+// preventing orphans (single words on the last line). Especially useful
+// for headings and hero text where visual balance matters.
+.text-balance {
+  text-wrap: balance;
+}
+
+// ============================================================
+//  Markdown Content — Styling for react-markdown rendered output
+// ============================================================
+//  This class is applied to a wrapper element around all markdown-rendered
+//  content throughout the application (chat messages, help text, etc.).
+//  It provides a consistent, readable typographic style for all standard
+//  Markdown elements without affecting other parts of the page.
+//
+//  Design principles:
+//  - Hierarchy through size + weight (not colour alone).
+//  - Primary-tinted accents keep the brand present without overwhelming.
+//  - Tables are display:block so they can scroll horizontally on narrow
+//    viewports (mobile-friendly).
+
+.markdown-content {
+  // --- Headings ---
+  // Shared heading traits (weight, colour, spacing) then size overrides per level.
+  h1, h2, h3 {
+    font-weight: 600;
+    color: @gray-800;
+    margin-top: @space-4;    // generous top margin to separate from preceding content
+    margin-bottom: @space-2; // tighter bottom margin — headings should sit close to their body
+  }
+
+  h1 { font-size: @text-xl; }
+  h2 { font-size: @text-lg; }
+  h3 { font-size: @text-base; }
+
+  // --- Paragraphs ---
+  p {
+    margin: @space-2 0;
+    line-height: 1.625; // matches body line-height for consistent vertical rhythm
+  }
+
+  // --- Lists ---
+  ul, ol {
+    margin: @space-2 0;
+    padding-left: @space-5; // indent so bullets/numbers have room without collapsing
+  }
+
+  ul { list-style-type: disc; }
+  ol { list-style-type: decimal; }
+
+  li {
+    margin: @space-1 0; // small gap between list items for scannability
+  }
+
+  // --- Inline emphasis ---
+  strong {
+    font-weight: 600;
+    color: @gray-900; // slightly darker than body text to stand out
+  }
+
+  // --- Blockquotes ---
+  blockquote {
+    border-left: 4px solid @primary-300; // branded left bar is the canonical blockquote look
+    padding-left: @space-4;
+    margin: @space-3 0;
+    font-style: italic;
+    color: @gray-600; // muted colour reinforces the "quoted/indirect" semantic
+  }
+
+  // --- Inline code ---
+  code {
+    background: @primary-50;    // very light primary tint to distinguish from body text
+    color: @primary-700;
+    padding: 0.125rem 0.375rem; // tight padding — inline code should feel compact
+    border-radius: 0.25rem;
+    font-size: @text-sm;        // slightly smaller than body so it doesn't disrupt reading
+    font-family: @font-mono;
+  }
+
+  // --- Code blocks (fenced code) ---
+  pre {
+    background: @gray-50;
+    border-radius: @radius-xl;
+    padding: @space-4;
+    margin: @space-3 0;
+    overflow-x: auto;            // long lines scroll horizontally instead of breaking layout
+    font-size: @text-sm;
+
+    // Reset inline code styling when nested inside a pre block.
+    code {
+      background: transparent;
+      color: @gray-800;
+      padding: 0;
+    }
+  }
+
+  // --- Links ---
+  a {
+    color: @primary-600;
+    text-decoration: underline;
+    text-underline-offset: 2px; // lift underline slightly for legibility on descenders
+
+    &:hover {
+      color: @primary-700; // darken on hover for clear interactive feedback
+    }
+  }
+
+  // --- Tables ---
+  // Tables use display:block + overflow-x:auto to enable horizontal scrolling
+  // on narrow screens (mobile-friendly pattern). -webkit-overflow-scrolling
+  // enables momentum scrolling on iOS.
+  table {
+    width: 100%;
+    margin: 0.75rem 0;          // 12px — slightly tighter than paragraph margins
+    border-collapse: collapse;  // merge adjacent cell borders into a single line
+    font-size: 0.8125rem;       // 13px — smaller than body so tables feel compact
+    display: block;             // required for overflow-x:auto to work
+    overflow-x: auto;           // horizontal scroll when table is wider than container
+    -webkit-overflow-scrolling: touch; // smooth momentum scroll on iOS
+  }
+
+  // Table header row bottom border — thicker and branded to separate header from body.
+  thead {
+    border-bottom: 2px solid @primary-200;
+  }
+
+  // Cell defaults shared by <th> and <td>.
+  th, td {
+    border: 1px solid @gray-200;
+    padding: 0.375rem 0.5rem;   // 6px 8px — compact but not cramped
+    text-align: left;
+    vertical-align: top;        // top-align so multi-line cells don't look misaligned
+    min-width: 60px;            // prevents cells from collapsing too small on wide tables
+  }
+
+  // Header cells get a tinted background and bolder text.
+  th {
+    background: @primary-50;
+    font-weight: 600;
+    color: @gray-700;
+    white-space: nowrap; // prevents header text from wrapping, keeping columns narrow
+  }
+
+  // Zebra-striping on even rows for easier horizontal scanning.
+  // Uses a semi-transparent gray so it blends with any background.
+  tbody tr:nth-child(even) {
+    background: rgba(249, 250, 251, 0.5); // gray-50 at 50% opacity
+  }
+}

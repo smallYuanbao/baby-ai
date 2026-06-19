@@ -1,0 +1,98 @@
+// ============================================================
+//
+//  Header.module.less
+//
+//  Styles for the top-level branding / navigation bar
+//  rendered by <Header /> (see ./Header.tsx).
+//
+//  The header is a purely presentational, stateless bar that
+//  sits at the top of the application shell.  It displays a
+//  circular bear mascot avatar, the app title ("育儿AI助手"),
+//  and a subtitle.  The bar has a white background with a
+//  subtle primary-tinted bottom border to visually separate
+//  it from the content area below.
+//
+//  @component  Header
+//  @section    Layout
+//  @imports    variables.less (global design tokens)
+//
+// ============================================================
+
+@import '../../styles/variables.less';
+
+// ------------------------------------------------------------------
+//  Header bar
+// ------------------------------------------------------------------
+//  A fixed-height bar that spans the full width.  It uses a white
+//  background and a pale orange bottom border lifted from the
+//  primary colour scale for a soft brand tie-in without visual
+//  weight.
+// ------------------------------------------------------------------
+.header {
+  flex-shrink: 0;              // never collapse when parent is a flex column
+  padding: @space-3 @space-5;  // 12px vertical, 20px horizontal breathing room
+  background: @white;
+  border-bottom: 1px solid @primary-100;
+}
+
+// ------------------------------------------------------------------
+//  Inner container
+// ------------------------------------------------------------------
+//  Flex row that holds the avatar and the text block side by side.
+//  `gap` replaces the need for explicit margin-right on the avatar.
+// ------------------------------------------------------------------
+.container {
+  display: flex;
+  align-items: center;
+  gap: @space-3;  // 12px — comfortable separation between avatar and text
+}
+
+// ------------------------------------------------------------------
+//  Avatar
+// ------------------------------------------------------------------
+//  Circular container for the inline SVG bear illustration.
+//  2.5rem (40px) matches typical small-avatar conventions and keeps
+//  the header compact.  @radius-2xl (20px) on a 40px square produces
+//  a perfect circle without relying on the 9999px-pill hack, which
+//  can cause rendering quirks in some browsers on fixed-size elements.
+// ------------------------------------------------------------------
+.avatar {
+  width: 2.5rem;              // 40px — compact enough for a top bar
+  height: 2.5rem;
+  border-radius: @radius-2xl; // 20px on a 40px box = circle
+  background: @primary-100;   // pale orange fill that peeks behind the SVG
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;           // clip the SVG to the circular boundary
+}
+
+// ------------------------------------------------------------------
+//  Avatar SVG
+// ------------------------------------------------------------------
+//  Slightly smaller than its container so the bear graphic has a
+//  bit of internal breathing room inside the coloured circle.
+// ------------------------------------------------------------------
+.avatarSvg {
+  width: 2rem;   // 32px — inset 4px on each side from the 40px container
+  height: 2rem;
+}
+
+// ------------------------------------------------------------------
+//  Text content
+// ------------------------------------------------------------------
+//  Title and subtitle stacked vertically.  No wrapper div styles
+//  needed — the parent flex container handles alignment, and these
+//  rules only set typographic properties.
+// ------------------------------------------------------------------
+.title {
+  font-size: @text-lg;       // 18px — prominent but not a page-level heading
+  font-weight: 700;
+  color: @gray-800;          // near-black for high readability on white
+  line-height: 1.25;         // tight leading avoids excess vertical space in the thin header bar
+}
+
+.subtitle {
+  font-size: @text-xs;       // 12px — intentionally small so it doesn't compete with the title
+  color: @gray-400;          // muted gray for secondary hierarchy
+}

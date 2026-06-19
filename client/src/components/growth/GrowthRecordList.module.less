@@ -1,0 +1,229 @@
+/**
+ * GrowthRecordList — component styles
+ *
+ * Chronological list of baby growth records. Each record is rendered as a
+ * tappable card showing the date, metric tags (height, weight, etc.), and a
+ * truncated notes line. An empty-state placeholder is shown when no records
+ * exist.
+ *
+ * @file client/src/components/growth/GrowthRecordList.module.less
+ */
+
+@import '../../styles/variables.less';
+
+/* ==========================================================================
+   Wrapper & Layout
+   ========================================================================== */
+
+.wrapper {
+  /** Outer container — provides uniform breathing room on all sides. */
+  padding: 1rem;
+}
+
+/* ==========================================================================
+   Top Bar
+   ========================================================================== */
+
+.topBar {
+  /** Horizontal bar with record count on the left and the add button
+   *  on the right. */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.recordCount {
+  /** Subtle secondary label; sized and coloured to support rather than
+   *  compete with the primary CTA beside it. */
+  font-size: 0.875rem;
+  color: @gray-500;
+}
+
+.addButton {
+  /** Pill-shaped primary CTA anchored in the top bar. Uses the primary
+   *  brand colour and a fully rounded shape for a friendly, modern feel. */
+  padding: 0.375rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: @white;
+  background: @primary-500;
+  border-radius: 1.25rem;
+
+  /** Animate only colour-related properties to avoid layout-impacting
+   *  transitions (e.g. width, padding). */
+  transition: color, background-color, border-color 200ms;
+
+  &:hover {
+    /** Slightly darker primary shade gives clear interactive feedback. */
+    background: @primary-600;
+  }
+}
+
+/* ==========================================================================
+   Empty State
+   ========================================================================== */
+
+.emptyState {
+  /** Vertically-centred placeholder that fills the list area when no
+   *  records exist. Generous vertical padding prevents a cramped feel. */
+  text-align: center;
+  padding: 4rem 0;
+  color: @gray-400;
+}
+
+.emptyIcon {
+  /** Oversized icon serves as the primary visual when the list is empty.
+   *  Displayed as a block so it sits above the text lines. */
+  font-size: 2.5rem;
+  display: block;
+  margin-bottom: 0.75rem;
+}
+
+.emptyText {
+  /** Primary message in the empty state (e.g. "No records yet"). */
+  font-size: 0.875rem;
+}
+
+.emptyHint {
+  /** Secondary call-to-action hint (e.g. "Tap + to add your first record").
+   *  Smaller and pushed slightly below the primary text. */
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+/* ==========================================================================
+   Record List
+   ========================================================================== */
+
+.list {
+  /** Vertical stack of record cards. Flexbox column with gap ensures
+   *  consistent inter-card spacing and avoids margin-collapse quirks. */
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+/* Each record is rendered as a tappable card — full width, softly rounded,
+ * with a nearly-invisible border that deepens on hover. */
+.recordItem {
+  width: 100%;
+  padding: 0.875rem;
+  background: @white;
+  border: 1px solid @primary-50;
+  border-radius: 1.25rem;
+  text-align: left;
+  /** "all" transition is acceptable here because no layout-affecting
+   *  properties change — only border-color and box-shadow shift. */
+  transition: all 200ms;
+
+  &:hover {
+    /** Subtle elevation: border shifts to a more visible primary tint and
+     *  a faint shadow lifts the card without feeling heavy. */
+    border-color: @primary-200;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  }
+}
+
+/* ==========================================================================
+   Record Item Header
+   ========================================================================== */
+
+.recordHeader {
+  /** Flex row pairing the bold date with a low-key "tap to edit" hint
+   *  on the opposite side. */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.recordDate {
+  /** The date is the primary identifier for a record — bold and dark
+   *  so it is the first thing the user reads. */
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: @gray-700;
+}
+
+.editHint {
+  /** Faint label signalling the card is interactive. Low contrast
+   *  intentionally — it should be visible but not distracting. */
+  font-size: 0.75rem;
+  color: @gray-400;
+}
+
+/* ==========================================================================
+   Metric Tags
+   ========================================================================== */
+
+.tags {
+  /** Wrapping flex row so tags flow naturally onto the next line when
+   *  the container is narrow (e.g. on mobile). */
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.tag {
+  /** Shared pill geometry for all metric category tags. Colour is applied
+   *  by the variant classes below so each metric is visually distinct. */
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.5rem;
+}
+
+/* ── Per-metric colour variants ──
+ *
+ * Each variant pairs a tinted (50-level) background with a saturated
+ * (600-level) foreground. Colours are hard-coded rather than referenced
+ * through Less variables because they represent semantic category
+ * distinctions that are unlikely to change with a theme or brand refresh. */
+
+.tagBlue {   /* height */
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.tagGreen {  /* weight */
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.tagPurple { /* head circumference */
+  background: #faf5ff;
+  color: #9333ea;
+}
+
+.tagIndigo { /* sleep duration */
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.tagAmber {  /* diaper count */
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.tagPink {   /* feeding */
+  background: #fdf2f8;
+  color: #db2777;
+}
+
+/* ==========================================================================
+   Notes
+   ========================================================================== */
+
+.notes {
+  /** Renders the record's free-text notes as a single truncated line.
+   *  Ellipsis truncation prevents long notes from breaking the card layout;
+   *  users can tap the card to see the full text on the detail/edit screen. */
+  font-size: 0.75rem;
+  color: @gray-400;
+  margin-top: 0.5rem;
+
+  /* Single-line truncation with ellipsis */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

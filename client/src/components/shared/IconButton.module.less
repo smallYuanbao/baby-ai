@@ -1,0 +1,63 @@
+// IconButton.module.less
+// Styles for the IconButton shared component — a square, icon-only button
+// supporting primary (filled), secondary (tinted), and ghost (transparent) variants.
+// Sizing uses design-token variables for consistent spacing, radius, and transitions.
+
+@import '../../styles/variables.less';
+
+// ---------------------------------------------------------------------------
+// Base button layout
+// ---------------------------------------------------------------------------
+.button {
+  width: @space-10;               // square icon button
+  height: @space-10;
+  display: flex;                  // center the icon child
+  align-items: center;
+  justify-content: center;
+  border-radius: @radius-2xl;     // fully rounded
+  transition: all @transition-base; // smooth hover / active changes
+  min-width: 44px;                // WCAG 2.5.5 touch-target minimum
+  min-height: 44px;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.4;                 // visually indicate disabled state
+    cursor: not-allowed;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Variants — fill strength + colour intent
+// ---------------------------------------------------------------------------
+.primary {
+  background: @primary-500;       // filled with brand colour
+  color: @white;                  // white icon on filled bg
+
+  &:hover {
+    background: @primary-600;     // deepen on hover
+  }
+
+  &:active {
+    background: @primary-700;     // deepen further on press
+  }
+}
+
+.secondary {
+  background: @primary-50;        // subtle tint
+  color: @primary-600;            // brand-coloured icon
+
+  &:hover {
+    background: @primary-100;     // slightly stronger tint on hover
+  }
+}
+
+.ghost {
+  color: @gray-400;               // muted icon, no background
+
+  &:hover {
+    color: @gray-600;             // darken icon on hover
+    background: @gray-100;        // reveal subtle background on hover
+  }
+
+  // No :active style — ghost variant keeps hover as the strongest feedback.
+}

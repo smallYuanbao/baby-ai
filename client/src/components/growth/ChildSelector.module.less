@@ -1,0 +1,247 @@
+// =============================================================================
+// ChildSelector.module.less
+// Styles for the growth-tracking child selector panel.
+// Covers the child list, loading state, delete actions, and the add-child form
+// (including gender toggle and action buttons).  Uses project-level Less
+// variables from styles/variables.less for colours and spacing.
+// =============================================================================
+
+@import '../../styles/variables.less';
+
+// ---------------------------------------------------------------------------
+// Root wrapper & loading state
+// ---------------------------------------------------------------------------
+
+// Full-height scrollable container that fills the remaining flex space.
+.wrapper {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem 1rem;
+}
+
+// Centred spinner / skeleton placeholder shown while children are being fetched.
+.loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+// ---------------------------------------------------------------------------
+// Header area (icon, title, subtitle)
+// ---------------------------------------------------------------------------
+
+.header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+// Large decorative emoji / icon above the title.
+.headerIcon {
+  font-size: 3.5rem;
+  display: block;
+  margin-bottom: 0.75rem;
+}
+
+.title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: @gray-800;
+  margin-bottom: 0.25rem;
+}
+
+.subtitle {
+  font-size: 0.875rem;
+  color: @gray-500;
+}
+
+// ---------------------------------------------------------------------------
+// Child list & individual cards
+// ---------------------------------------------------------------------------
+
+// Vertical stack of child cards with consistent spacing.
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+// Full-width pressable card for a single child.
+.childCard {
+  width: 100%;
+  padding: 1rem;
+  background: @surface-light;
+  border-radius: 1.25rem;
+  border: 1px solid @primary-100;
+  transition: all 200ms;
+  text-align: left;
+
+  // Subtle highlight on hover to indicate interactivity.
+  &:hover {
+    background: @primary-50;
+  }
+
+  // Slight press-down effect for tactile feedback.
+  &:active {
+    transform: scale(0.98);
+  }
+}
+
+// Flex row holding the avatar + info on the left and the delete action on the right.
+.childCardInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+// Left side of the card: avatar and text details.
+.childInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+// Emoji / icon representing the child.
+.childAvatar {
+  font-size: 1.875rem;
+}
+
+// Text container — reserved for future expansion (e.g. extra metadata lines).
+.childDetails {
+  // text container
+}
+
+.childName {
+  font-weight: 600;
+  color: @gray-800;
+}
+
+// Secondary info line (e.g. age, birth date).
+.childMeta {
+  font-size: 0.75rem;
+  color: @gray-400;
+}
+
+// ---------------------------------------------------------------------------
+// Delete button (inside a child card)
+// ---------------------------------------------------------------------------
+
+.deleteButton {
+  color: @gray-300;
+  // Animate colour changes on hover for a polished feel.
+  transition: color, background-color, border-color 200ms;
+  padding: 0.25rem;
+
+  // Turn red on hover to signal the destructive action.
+  &:hover {
+    color: #f87171;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Add-child form panel
+// ---------------------------------------------------------------------------
+
+// Card-like container for the inline add-child form.
+.formPanel {
+  background: @white;
+  border-radius: 1.25rem;
+  border: 1px solid @primary-200;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+// Text input fields (name, birth date, etc.).
+.formInput {
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  background: @surface-light;
+  border-radius: 1rem;
+  border: 1px solid @primary-100;
+
+  // Highlight border when the input is focused.
+  &:focus {
+    outline: none;
+    border-color: @primary-300;
+  }
+}
+
+// Label above a form field or group of fields.
+.formLabel {
+  font-size: 0.75rem;
+  color: @gray-400;
+  margin-bottom: 0.25rem;
+  display: block;
+}
+
+// ---------------------------------------------------------------------------
+// Gender toggle (male / female segmented control)
+// ---------------------------------------------------------------------------
+
+// Horizontal row of two side-by-side gender buttons.
+.genderToggle {
+  display: flex;
+  gap: 0.5rem;
+}
+
+// Base styles shared by both gender options.
+.genderOption {
+  flex: 1;
+  padding: 0.625rem 0;
+  border-radius: 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 200ms;
+
+  // Active male — blue tint with a blue border.
+  &.maleActive {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 2px solid #93c5fd;
+  }
+
+  // Inactive male — neutral grey; border is transparent to preserve layout.
+  &.maleInactive {
+    background: @gray-50;
+    color: @gray-500;
+    border: 2px solid transparent;
+  }
+
+  // Active female — pink tint with a pink border.
+  &.femaleActive {
+    background: #fdf2f8;
+    color: #be185d;
+    border: 2px solid #f9a8d4;
+  }
+
+  // Inactive female — same neutral treatment as inactive male.
+  &.femaleInactive {
+    background: @gray-50;
+    color: @gray-500;
+    border: 2px solid transparent;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Form actions & utility helpers
+// ---------------------------------------------------------------------------
+
+// Row of action buttons (e.g. Cancel / Save) at the bottom of the form.
+.formActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+// Utility: force an element to take full available width.
+.fullWidth {
+  width: 100%;
+}
+
+// Utility: flex-grow: 1 shorthand — lets a child fill remaining space.
+.flex1 {
+  flex: 1;
+}

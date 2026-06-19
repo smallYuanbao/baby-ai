@@ -1,0 +1,52 @@
+/**
+ * MessageAvatar.module.less
+ *
+ * Styles for the avatar displayed alongside each chat message.
+ * Renders a circular container with an icon inside — the background
+ * colour and icon sizing differ between assistant and user roles.
+ */
+
+@import '../../styles/variables.less';
+
+/* ------------------------------------------------------------------ */
+/*  Base avatar container                                             */
+/* ------------------------------------------------------------------ */
+
+.avatar {
+  width: 2.25rem;            /* 36px — compact but still tappable */
+  height: 2.25rem;
+  border-radius: 1.25rem;    /* 20px — pill shape, slightly larger than half */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;            /* prevent squeezing inside a flex row */
+  overflow: hidden;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);  /* subtle lift */
+}
+
+/* ------------------------------------------------------------------ */
+/*  Role-specific background colours                                   */
+/* ------------------------------------------------------------------ */
+
+.assistantAvatar {
+  background: @primary-100;  /* light tint — calm, non-intrusive */
+}
+
+.userAvatar {
+  background: @primary-500;  /* full saturation — the user’s “voice” */
+}
+
+/* ------------------------------------------------------------------ */
+/*  Role-specific icon sizing                                          */
+/* ------------------------------------------------------------------ */
+
+.assistantIcon {
+  width: 1.75rem;            /* 28px — larger icon for the assistant badge */
+  height: 1.75rem;
+}
+
+.userIcon {
+  width: 1.25rem;            /* 20px — smaller icon to visually separate roles */
+  height: 1.25rem;
+  color: @white;             /* white icon on the saturated user background */
+}

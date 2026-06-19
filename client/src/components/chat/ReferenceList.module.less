@@ -1,0 +1,67 @@
+// =============================================================================
+// ReferenceList.module.less
+// Styles for the expandable list of references (sources/documents) shown below
+// chat messages. Renders a toggle button with a chevron indicator and a
+// vertical stack of reference items when expanded.
+// =============================================================================
+
+@import '../../styles/variables.less';
+
+// ---------------------------------------------------------------------------
+// Root wrapper — provides top separation from the preceding message content
+// ---------------------------------------------------------------------------
+.wrapper {
+  // 0.75rem = 12px at default root, matching the message body spacing rhythm
+  margin-top: 0.75rem;
+}
+
+// ---------------------------------------------------------------------------
+// Toggle button — reveals/hides the reference list on click
+// ---------------------------------------------------------------------------
+.toggleButton {
+  display: flex;
+  align-items: center;
+  // Slightly tighter than the wrapper gap so the chevron and label read as a unit
+  gap: 0.375rem;
+  // 0.75rem = 12px — intentionally small to de-emphasise secondary UI
+  font-size: 0.75rem;
+  font-weight: 500;
+  // Muted neutral so the button doesn't compete with primary actions
+  color: @gray-500;
+  // Animate color, background, and border together for a smooth hover/layout shift
+  transition: color, background-color, border-color 200ms;
+
+  &:hover {
+    // Subtle shift to the primary hue on hover to signal interactivity
+    color: @primary-600;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Chevron — directional indicator, rotated open when the list is expanded
+// ---------------------------------------------------------------------------
+.chevron {
+  // 0.875rem = 14px — small icon that pairs well with the 0.75rem label
+  width: 0.875rem;
+  height: 0.875rem;
+  // 200ms matches the toggleButton transition for a unified feel
+  transition: transform 200ms;
+}
+
+// Applied alongside .chevron when the panel is expanded
+.chevronOpen {
+  // Right-pointing chevron → down-pointing, indicating an open disclosure
+  transform: rotate(90deg);
+}
+
+// ---------------------------------------------------------------------------
+// Reference list — vertical stack of individual reference items
+// ---------------------------------------------------------------------------
+.referenceList {
+  // 0.5rem = 8px of breathing room between the toggle button and the first item
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  // Uniform vertical spacing between reference items
+  gap: 0.5rem;
+}

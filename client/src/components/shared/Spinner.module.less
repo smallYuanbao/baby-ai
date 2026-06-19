@@ -1,0 +1,52 @@
+// ============================================================
+//
+//  Spinner.module.less — Loading Spinner Size Variants
+//
+//  @file      client/src/components/shared/Spinner.module.less
+//  @overview  CSS Module defining the dimensions for an animated
+//             loading spinner.  The spinner itself is an SVG or
+//             CSS animation rendered by the paired Spinner.tsx
+//             component; this stylesheet supplies only the
+//             width and height rules for each named size tier so
+//             the spinner occupies a predictable, design-system-
+//             aligned box regardless of context.
+//
+//  @usage     Imported as a CSS Module by Spinner.tsx.  Each
+//             class (.sm, .md, .lg) is applied conditionally
+//             based on the component's `size` prop.
+//
+//  Sizes reference @space tokens from variables.less:
+//    sm = @space-4  (1rem  / 16px) — inline with body text
+//    md = @space-6  (1.5rem / 24px) — inline with section headings
+//    lg = @space-8  (2rem  / 32px) — standalone placeholder / full-page loader
+//
+// ============================================================
+
+@import '../../styles/variables.less';
+
+// -------- Small ---------------------------------------------------------------
+// Inline-sized spinner — same height as a line of body text (@text-base = 1rem).
+// Use inside buttons, form fields, or next to paragraph copy where a larger
+// spinner would disrupt line-height.
+.sm {
+  width: @space-4;
+  height: @space-4;
+}
+
+// -------- Medium --------------------------------------------------------------
+// Section-grade spinner — sized to pair with sub-headings (~@text-xl / 1.25rem).
+// Use as a default size for card-level loading states, dropdown fetching
+// indicators, or table overlay spinners.
+.md {
+  width: @space-6;
+  height: @space-6;
+}
+
+// -------- Large ---------------------------------------------------------------
+// Standalone spinner — tall enough to anchor a full-page or full-container
+// loading state.  Use for initial page loads, async route transitions,
+// or any placeholder that replaces the entire content area.
+.lg {
+  width: @space-8;
+  height: @space-8;
+}

@@ -1,0 +1,186 @@
+// =============================================================================
+// GrowthRecordForm.module.less
+// Styles for the GrowthRecordForm component — a bottom-sheet modal used to
+// add or edit a child's growth record (height, weight, head circumference,
+// and the date of measurement).  Scoped via CSS Modules.
+// =============================================================================
+
+@import '../../styles/variables.less';
+
+// ---------------------------------------------------------------------------
+// Overlay — semi-transparent backdrop that dismisses the panel on tap
+// ---------------------------------------------------------------------------
+
+.overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;          // pin panel to the bottom edge
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.3); // 30% black scrim
+}
+
+// ---------------------------------------------------------------------------
+// Panel — the bottom-sheet card itself
+// ---------------------------------------------------------------------------
+
+.panel {
+  width: 100%;
+  max-width: 42rem;
+  background: @white;
+  border-radius: 1.5rem 1.5rem 0 0; // rounded only on top corners
+  max-height: 85vh;                 // leave room for the status bar / safe-area
+  overflow-y: auto;                 // scroll internally when content is tall
+}
+
+// ---------------------------------------------------------------------------
+// Header — sticky top bar with title and close button
+// ---------------------------------------------------------------------------
+
+.header {
+  position: sticky;
+  top: 0;
+  background: @white;
+  border-radius: 1.5rem 1.5rem 0 0; // match panel radius so scroll doesn't reveal hard corners
+  border-bottom: 1px solid @gray-100;
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.headerTitle {
+  font-weight: 600;
+  color: @gray-800;
+}
+
+.closeButton {
+  color: @gray-400;
+  font-size: 1.125rem;
+
+  &:hover {
+    color: @gray-600; // darken on hover for affordance
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Form body — vertical stack of fields
+// ---------------------------------------------------------------------------
+
+.form {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+// Wrapper for a single label + input pair (structural container, no visual style)
+.formGroup {}
+
+// ---------------------------------------------------------------------------
+// Form controls — labels, text inputs, textarea, selects
+// ---------------------------------------------------------------------------
+
+.label {
+  font-size: 0.75rem;
+  color: @gray-400;
+  margin-bottom: 0.25rem;
+  display: block;
+}
+
+.input {
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  background: @surface-light;
+  border-radius: 1rem;
+  border: 1px solid @primary-100;
+
+  &:focus {
+    outline: none;
+    border-color: @primary-300; // highlight with deeper brand color
+  }
+}
+
+// Inherits all .input styles and overrides resize behaviour
+.textarea {
+  &:extend(.input);
+  resize: none;
+}
+
+// ---------------------------------------------------------------------------
+// Grid layouts — 2‑column and 3‑column for compact field groups
+// ---------------------------------------------------------------------------
+
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+.grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+// ---------------------------------------------------------------------------
+// Select — native <select> styling to match the rest of the form
+// ---------------------------------------------------------------------------
+
+.select {
+  padding: 0.625rem 0.5rem;
+  font-size: 0.875rem;
+  background: @surface-light;
+  border-radius: 1rem;
+  border: 1px solid @primary-100;
+}
+
+// ---------------------------------------------------------------------------
+// Actions — bottom button row (Cancel / Save)
+// ---------------------------------------------------------------------------
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+}
+
+.cancelButton {
+  flex: 1;
+  padding: 0.625rem 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: @gray-500;
+  background: @gray-50;
+  border-radius: 1.25rem;
+  transition: color, background-color, border-color 200ms;
+
+  &:hover {
+    background: @gray-100;
+  }
+}
+
+.saveButton {
+  flex: 1;
+  padding: 0.625rem 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: @white;
+  background: @primary-500;
+  border-radius: 1.25rem;
+  transition: color, background-color, border-color 200ms;
+
+  &:hover {
+    background: @primary-600;
+  }
+
+  // Visually communicate the button is inactive when the form is invalid / submitting
+  &:disabled {
+    opacity: 0.5;
+  }
+}

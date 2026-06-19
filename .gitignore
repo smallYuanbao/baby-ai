@@ -1,3 +1,6 @@
+# Claude
+.claude/
+
 # Logs
 logs
 *.log
@@ -141,3 +144,75 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# ==================== #
+#       Python         #
+# ==================== #
+
+# Bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# Package management
+*.egg-info/
+*.egg
+dist/
+build/
+eggs/
+*.whl
+
+# pip
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Test & coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.hypothesis/
+
+# Type checking
+.mypy_cache/
+.pyre/
+.pytype/
+
+# Linter / Formatter
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# IDE
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Sphinx
+docs/_build/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Uploads
+uploads/*
+!uploads/.gitkeep
+
+# C extension artifacts
+*.so

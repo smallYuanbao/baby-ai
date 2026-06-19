@@ -1,0 +1,64 @@
+/**
+ * ChatContainer — chat panel layout styles.
+ *
+ * Provides the structural shell for the chat view:
+ *  - .wrapper:      fills available space, establishes a column flex context, clips overflow.
+ *  - .toolbar:      top bar pinned above the message list; houses action buttons (e.g. "Clear").
+ *  - .clearButton:  subtly-styled action button with hover feedback.
+ *  - .clearIcon:    small icon beside the "Clear" label.
+ */
+
+@import '../../styles/variables.less';
+
+// ---------------------------------------------------------------------------
+// Outer wrapper — grows to consume remaining flex space in the parent layout.
+// Column direction so the toolbar stacks above the scrolling message area.
+// ---------------------------------------------------------------------------
+.wrapper {
+  flex: 1;               // absorb all leftover space inside the parent flex container
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;      // clip child content; individual children handle their own scrolling
+}
+
+// ---------------------------------------------------------------------------
+// Toolbar — always-visible action bar at the top of the chat panel.
+// flex-shrink: 0 keeps it from collapsing when the message list is long.
+// ---------------------------------------------------------------------------
+.toolbar {
+  flex-shrink: 0;        // never compress below natural height
+  display: flex;
+  align-items: center;
+  justify-content: flex-end; // actions flush to the right edge
+  padding-left: 1rem;
+  padding-right: 1rem;
+  // Asymmetric vertical padding (0.375rem vs 1rem horizontal) keeps the bar
+  // compact while providing enough horizontal breathing room.
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+}
+
+// ---------------------------------------------------------------------------
+// Clear button — low-emphasis link/appearance button that darkens on hover.
+// ---------------------------------------------------------------------------
+.clearButton {
+  font-size: 0.75rem;    // smaller than body copy to de-emphasize the action
+  color: @gray-400;      // subdued default; steps up to @gray-600 on hover
+  // Short, uniform transition across all interactive properties for snappy feedback.
+  transition: color, background-color, border-color 200ms;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;          // narrow gap between icon and label text
+
+  &:hover {
+    color: @gray-600;    // darken on hover to indicate interactivity
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Clear icon — small inline SVG/icon next to the "Clear" label.
+// ---------------------------------------------------------------------------
+.clearIcon {
+  width: 0.875rem;       // ≈14px at default root font-size; matches the small label
+  height: 0.875rem;
+}

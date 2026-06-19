@@ -1,0 +1,171 @@
+@import '../../styles/variables.less';
+
+// =============================================================================
+// ChatInput — Chat message input bar
+//
+// Styles the bottom-anchored chat input area, including:
+//   - An optional file-preview row above the input
+//   - A multi-line textarea with placeholder, focus ring, and disabled state
+//   - Attach / mic action buttons to the left of the textarea
+//   - A send button to the right (pill-shaped, with hover/active/disabled states)
+//   - A hint / disclaimer line below the input area
+//
+// The wrapper is flex-shrink: 0 so it stays pinned at the bottom of a flex
+// column layout (e.g. inside a chat panel with scrollable message list above).
+// =============================================================================
+
+// ---------------------------------------------------------------------------
+// Layout
+// ---------------------------------------------------------------------------
+
+.wrapper {
+  // Prevent the input bar from collapsing when the message list above scrolls
+  flex-shrink: 0;
+  // Thin top border separates input from the message area
+  border-top: 1px solid @primary-50;
+  background: @white;
+  padding: @space-2d5 @space-3;
+}
+
+// ---------------------------------------------------------------------------
+// File Preview
+// ---------------------------------------------------------------------------
+
+.filePreview {
+  // Space between the file-preview row and the textarea below
+  margin-bottom: @space-2;
+}
+
+// ---------------------------------------------------------------------------
+// Input Area (horizontal row: buttons + textarea)
+// ---------------------------------------------------------------------------
+
+.inputArea {
+  display: flex;
+  // Align items to the bottom so buttons sit at the same baseline as the
+  // textarea, even when the textarea grows taller (multi-line)
+  align-items: flex-end;
+  gap: @space-2;
+}
+
+// ---------------------------------------------------------------------------
+// Action Buttons (attach, mic) — left of the textarea
+// ---------------------------------------------------------------------------
+
+.attachButton {
+  // Optical alignment: nudge the button slightly above the textarea baseline
+  // so it appears visually centered within the row
+  margin-bottom: @space-0d5;
+}
+
+.micButton {
+  margin-bottom: @space-0d5;
+}
+
+// ---------------------------------------------------------------------------
+// Textarea
+// ---------------------------------------------------------------------------
+
+.textareaWrapper {
+  flex: 1;
+  position: relative;
+}
+
+.textarea {
+  width: 100%;
+  padding: @space-2d5 @space-4;
+  font-size: @text-sm;
+  background: @surface-light;
+  // Pill / rounded-rect shape matching the overall design language
+  border-radius: @radius-2xl;
+  border: 1px solid @primary-100;
+  // Prevent the user from manually resizing; height is managed by auto-grow
+  // logic in the component (rows prop / JS-driven expansion)
+  resize: none;
+  transition: all @transition-base;
+
+  &::placeholder {
+    color: @gray-350;
+  }
+
+  &:focus {
+    outline: none;
+    // Slightly darker border on focus for a clear active indicator
+    border-color: @primary-300;
+    // Subtle glow ring — 2px spread, no offset, uses a light primary tint
+    box-shadow: 0 0 0 2px @primary-100;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Send Button
+// ---------------------------------------------------------------------------
+
+.sendButton {
+  // Prevent the button from shrinking when textarea grows
+  flex-shrink: 0;
+  // Fixed size square button (44×44 px fallbacks meet WCAG touch-target minimum)
+  width: 2.75rem;
+  height: 2.75rem;
+  // Matching pill radius
+  border-radius: @radius-2xl;
+  background: @primary-500;
+  color: @white;
+  font-weight: 600;
+  transition: all @transition-base;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  // Subtle elevation so the send button stands out as the primary action
+  box-shadow: @shadow-sm;
+  // WCAG 2.5.5 / 2.5.8: minimum touch-target size (44×44 CSS pixels)
+  min-width: 44px;
+  min-height: 44px;
+
+  // --- States ---
+
+  &:hover {
+    background: @primary-600;
+  }
+
+  &:active {
+    background: @primary-700;
+    // Slight scale-down gives a "press" tactile feel
+    transform: scale(0.95);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+
+    &:active {
+      // Cancel the press animation when disabled so the button stays still
+      transform: scale(1);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Icons
+// ---------------------------------------------------------------------------
+
+.sendIcon {
+  width: @space-5;
+  height: @space-5;
+}
+
+// ---------------------------------------------------------------------------
+// Hint / Disclaimer
+// ---------------------------------------------------------------------------
+
+.hint {
+  font-size: @text-xs;
+  // Muted color so the hint reads as secondary / disclaimer info
+  color: @gray-300;
+  text-align: center;
+  margin-top: @space-2;
+}

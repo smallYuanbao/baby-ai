@@ -1,0 +1,68 @@
+# =============================================================================
+# File: requirements.txt
+# Project: baby-ai / reranker — Reranking service for search results
+#
+# What this file does:
+#   Declares the Python package dependencies for the reranker sub-project.
+#   The reranker is a FastAPI microservice that re-scores an ordered list of
+#   document candidates using a BGE-family cross-encoder (FlagEmbedding) to
+#   improve retrieval quality beyond the first-stage retriever.
+#
+# How to use:
+#   pip install -r requirements.txt
+#
+#   For GPU acceleration (recommended for production):
+#     1. Ensure CUDA / cuDNN are installed and compatible with your PyTorch
+#        version.
+#     2. Install PyTorch with CUDA support BEFORE running this file:
+#          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+#     3. Then: pip install -r requirements.txt
+#
+#   For CPU-only environments (development / CI):
+#     pip install -r requirements.txt
+#     The model will load on CPU automatically when no GPU is detected.
+#
+# Prerequisites:
+#   - Python >= 3.9, < 3.13 (constrained by NumPy < 2 and torch compatibility)
+#   - pip >= 21.0
+#   - (GPU only) CUDA 11.8+ or 12.1+, cuDNN 8+
+#
+# Expected output of `pip install -r requirements.txt`:
+#   All five packages (and their transitive dependencies) are installed into
+#   the active Python environment. No errors should appear. Warnings about
+#   pip version are non-critical.
+#
+# Edge cases / notes:
+#   - NumPy is pinned to < 2 because FlagEmbedding and some torch ecosystem
+#     packages are not yet compatible with NumPy 2.x ABI changes.  Removing
+#     this pin may cause import errors or silent numerical mismatches.
+#   - uvicorn[standard] includes websockets and httptools for better
+#     concurrency; omit [standard] if you use gunicorn + uvicorn workers.
+#   - PyTorch wheels in this file come from PyPI (CPU-only by default).  If
+#     you need a different CUDA version, install torch separately first.
+# =============================================================================
+
+# Web framework — provides the HTTP routing, dependency injection, and
+# request/response handling for the reranker endpoint.
+fastapi
+
+# ASGI server — serves the FastAPI app.  The [standard] extra installs
+# websockets and httptools for better async performance.  Start with:
+#   uvicorn main:app --host 0.0.0.0 --port 8000
+uvicorn[standard]
+
+# Cross-encoder / embedding model — wraps BGE-reranker-v2 and similar models
+# from BAAI.  Provides the `FlagReranker` class used to compute relevance
+# scores for each (query, document) pair.
+FlagEmbedding
+
+# Deep-learning framework — required by both FlagEmbedding and the underlying
+# transformers library.  The reranker loads a transformer model; torch is the
+# default backend for inference.
+torch
+
+# Numerical library — needed by torch and FlagEmbedding.  Pinned below v2 to
+# avoid ABI incompatibility with the installed torch / FlagEmbedding versions.
+# Remove or relax this pin only after verifying all dependencies support
+# NumPy 2.x.
+numpy<2

@@ -1,0 +1,33 @@
+/**
+ * AppShell — top-level layout shell for the application.
+ *
+ * Provides a mobile-first, vertically-stacked container that constrains the
+ * full viewport.  The narrow max-width (42rem) keeps content focused and
+ * readable on wider screens, while 100dvh ensures correct sizing even when
+ * mobile browser toolbars appear or disappear.
+ */
+
+@import '../../styles/variables.less';
+
+// ── Root wrapper ────────────────────────────────────────────────────────────
+// Full-viewport column that centers a constrained-width card on desktop.
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;              // dsvh avoids iOS Safari toolbar jank
+  max-width: 42rem;            // keeps chat / content line-length comfortable
+  margin: 0 auto;              // center on viewports wider than 42rem
+  background: @white;
+  box-shadow: @shadow-sm;      // subtle separation from the body background
+}
+
+// ── Main content area ───────────────────────────────────────────────────────
+// Flex child that fills remaining vertical space and scrolls independently.
+
+.main {
+  flex: 1;                     // consume all space not taken by header/footer
+  overflow: hidden;            // pass scrolling to inner scroll containers
+  display: flex;
+  flex-direction: column;      // allows children (e.g. message list) to stack
+}

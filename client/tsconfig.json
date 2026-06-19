@@ -1,0 +1,43 @@
+{
+  /**
+   * Client-side TypeScript configuration for the baby-ai frontend application.
+   *
+   * This tsconfig extends the project-wide base configuration (tsconfig.base.json)
+   * and layers on client-specific settings:
+   *   - JSX transform for React (automatic runtime import via react-jsx)
+   *   - Module path alias `@/` mapped to `./src/` for clean imports
+   *   - Vite client type declarations for import.meta.env and asset handling
+   *
+   * The client source lives under ./src and compiles to ./dist.
+   */
+
+  "extends": "../tsconfig.base.json",
+
+  "compilerOptions": {
+    // Use React's automatic JSX runtime (no need for `import React` in every file)
+    "jsx": "react-jsx",
+
+    // Output compiled JavaScript to this directory
+    "outDir": "./dist",
+
+    // Root of the TypeScript source files within this package
+    "rootDir": "./src",
+
+    // Base directory for resolving non-relative module names
+    "baseUrl": ".",
+
+    // Path aliases — `@/components/Foo` resolves to `./src/components/Foo`
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+
+    // Include Vite's client-side type definitions (e.g. import.meta.env, static asset imports)
+    "types": ["vite/client"]
+  },
+
+  // Only compile TypeScript and TSX files under ./src
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+
+  // Prevent node_modules and build output from being type-checked
+  "exclude": ["node_modules", "dist"]
+}

@@ -1,0 +1,269 @@
+// ============================================================
+//
+//  RiddleGame.module.less — Riddle Game Component Styles
+//
+//  @file      client/src/components/play/RiddleGame.module.less
+//  @overview  CSS Modules stylesheet for the RiddleGame component.
+//             Provides layout, card, input, result, and utility
+//             classes that compose the interactive riddle‑solving UI.
+//             All colours and spacing are driven by the project's
+//             design tokens defined in variables.less.
+//
+//  @tokens    Consumes the global Less variables declared in
+//             client/src/styles/variables.less (primary palette,
+//             gray scale, surface colours, spacing scale, etc.).
+//
+// ============================================================
+
+@import '../../styles/variables.less';
+
+// =========================================================================
+//  Layout
+// =========================================================================
+
+// Full‑height flex wrapper that fills the parent container and prevents
+// overflow from pushing content outside the viewport.
+.wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+// Scrollable content area that expands to consume remaining vertical space.
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 1rem;
+}
+
+// =========================================================================
+//  Top Bar
+// =========================================================================
+
+// Horizontal bar at the top of the screen: back button, title, and score.
+.topBar {
+  flex-shrink: 0; // never collapse when space is tight
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+}
+
+// Back‑navigation link styled as subtle secondary text.
+.backButton {
+  font-size: 0.875rem;
+  color: @gray-500;
+
+  &:hover {
+    color: @gray-700; // darken on hover for visual feedback
+  }
+}
+
+// Centred screen title, grows to fill the space between back button and score.
+.screenTitle {
+  flex: 1;
+  text-align: center;
+  font-weight: 600;
+  color: @gray-800;
+}
+
+// Current score badge rendered in the brand colour for emphasis.
+.score {
+  font-size: 0.75rem;
+  color: @primary-500;
+  font-weight: 600;
+}
+
+// =========================================================================
+//  Setup Section — age & difficulty selection
+// =========================================================================
+
+// Vertical stack of setup controls (label + option row).
+.setupSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem 0;
+}
+
+// Small, subdued label above each option group.
+.label {
+  font-size: 0.75rem;
+  color: @gray-400;
+  margin-bottom: 0.25rem;
+  display: block;
+}
+
+// Horizontal row of toggle‑button options.
+.optionGroup {
+  display: flex;
+  gap: 0.5rem;
+}
+
+// Individual toggle button shared by both age and difficulty selectors.
+.optionButton {
+  flex: 1;
+  padding: 0.5rem 0;
+  border-radius: 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 200ms; // smooth background / border changes (uses @transition-base)
+
+  // =====  Age selector states  =====
+
+  // Selected age — filled brand colour, white text.
+  &.activeAge {
+    background: @primary-500;
+    color: @white;
+  }
+
+  // Unselected age — neutral gray background with muted text.
+  &.inactiveOption {
+    background: @gray-50;
+    color: @gray-500;
+  }
+
+  // =====  Difficulty selector states  =====
+
+  // Selected difficulty — tinted brand background with an accent border.
+  &.activeDifficulty {
+    background: @primary-100;
+    color: @primary-700;
+    border: 2px solid @primary-300;
+  }
+
+  // Unselected difficulty — neutral gray background with transparent border
+  // to preserve layout height consistency with the selected state.
+  &.inactiveDifficulty {
+    background: @gray-50;
+    color: @gray-500;
+    border: 2px solid transparent;
+  }
+}
+
+// =========================================================================
+//  Game Section — riddle card, hint, result, and controls
+// =========================================================================
+
+// Vertical stack that holds the riddle card, hint, input, and actions.
+.gameSection {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem 0;
+}
+
+// ----------  Riddle Card  ----------
+
+// Warm‑toned card displaying the riddle text, styled with an amber gradient
+// and border to evoke a parchment / puzzle feel.
+.riddleCard {
+  padding: 1.25rem;
+  background: linear-gradient(to bottom right, #fffbeb, #fff7ed);
+  border-radius: 1.25rem;
+  border: 1px solid #fde68a;
+  text-align: center;
+}
+
+// Category badge above the riddle text (e.g. "Animals", "Food").
+.riddleCategory {
+  font-size: 0.75rem;
+  color: #d97706; // amber‑700 — warm accent that matches the card theme
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+// The riddle clue itself — larger, bolder body text with generous line height.
+.riddleText {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: @gray-800;
+  line-height: 1.625;
+}
+
+// ----------  Hint Box  ----------
+
+// Blue‑tinted container that reveals progressively stronger hints on tap.
+.hintBox {
+  padding: 0.75rem;
+  background: #eff6ff; // blue‑50
+  border-radius: 1rem;
+  border: 1px solid #bfdbfe; // blue‑200
+}
+
+// Hint copy rendered in a medium blue for clear differentiation from the riddle.
+.hintText {
+  font-size: 0.875rem;
+  color: #2563eb; // blue‑600
+}
+
+// ----------  Result Box  ----------
+
+// Feedback container shown after the user submits a guess.
+.resultBox {
+  padding: 0.75rem;
+  border-radius: 1rem;
+
+  // Correct answer — green success treatment.
+  &.success {
+    background: #f0fdf4; // green‑50
+    border: 1px solid #bbf7d0; // green‑200
+  }
+
+  // Incorrect answer — neutral gray treatment to de‑emphasise the failure.
+  &.failure {
+    background: @gray-50;
+    border: 1px solid @gray-100;
+  }
+}
+
+// Result message text (success encouragement or failure hint).
+.resultText {
+  font-size: 0.875rem;
+}
+
+// ----------  Guess Input  ----------
+
+// Horizontal row containing the text input and submit button.
+.guessRow {
+  display: flex;
+  gap: 0.5rem;
+}
+
+// Text input for typing a guess — warm surface background with a soft brand
+// border that intensifies on focus.
+.guessInput {
+  flex: 1;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  background: @surface-light;
+  border-radius: 1rem;
+  border: 1px solid @primary-100;
+
+  &:focus {
+    outline: none;
+    border-color: @primary-300; // deepen border to indicate active state
+  }
+}
+
+// ----------  Action Buttons  ----------
+
+// Horizontal row of action buttons (hint, skip, next, etc.).
+.actionRow {
+  display: flex;
+  gap: 0.5rem;
+}
+
+// =========================================================================
+//  Utility Classes
+// =========================================================================
+
+// Force an element to span the full width of its parent.
+.fullWidth {
+  width: 100%;
+}
+
+// Allow an element to grow and fill available space within a flex container.
+.flex1 {
+  flex: 1;
+}

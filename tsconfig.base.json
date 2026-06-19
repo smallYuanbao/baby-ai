@@ -1,0 +1,104 @@
+{
+  // ============================================================================
+  // tsconfig.base.json — Shared TypeScript Base Configuration
+  // ============================================================================
+  //
+  // This file defines the foundational TypeScript compiler options shared across
+  // all sub-projects (client, server) in this project. Individual tsconfig.json
+  // files extend this base via "extends": "./tsconfig.base.json" and may add or
+  // override options as needed for their specific context.
+  //
+  // Role in the project:
+  // - Single source of truth for compiler strictness, module strategy, and
+  //   output settings.
+  // - Ensures consistent compilation behaviour across the entire codebase.
+  // - Simplifies maintenance: a change here propagates to all extending configs.
+  //
+  // Typical consumers:
+  // - client/tsconfig.json      (React frontend application)
+  // - server/tsconfig.json      (Node.js backend application)
+
+  "compilerOptions": {
+
+    // -- Language and Runtime Target --------------------------------------------
+
+    // "target": The ECMAScript version to which TypeScript source is compiled.
+    // ES2022 is widely supported in modern Node.js (18+) and evergreen browsers,
+    // and enables top-level await, static class fields, and private fields.
+    "target": "ES2022",
+
+    // -- Module System ----------------------------------------------------------
+
+    // "module": The module system used in emitted JavaScript.
+    // ESNext preserves dynamic import() syntax and lets the bundler handle
+    // module format transformation (e.g. to ESM or CJS).
+    "module": "ESNext",
+
+    // "moduleResolution": How the compiler resolves module specifiers.
+    // "bundler" is optimised for use with bundlers (Vite, esbuild, Webpack,
+    // Rollup). It supports package.json "exports" maps and does not require
+    // explicit file extensions in imports.
+    "moduleResolution": "bundler",
+
+    // -- Strictness -------------------------------------------------------------
+
+    // "strict": Enables all strict type-checking options in one flag:
+    //   - strictNullChecks
+    //   - strictFunctionTypes
+    //   - strictBindCallApply
+    //   - strictPropertyInitialization
+    //   - noImplicitAny
+    //   - noImplicitThis
+    //   - alwaysStrict
+    // This is the recommended baseline for catch-at-compile-time safety.
+    "strict": true,
+
+    // -- Interop ----------------------------------------------------------------
+
+    // "esModuleInterop": Emit __importDefault and __importStar helpers for
+    // default-import compatibility with CommonJS modules. Required when
+    // importing CJS dependencies that are not strictly ESM-compatible.
+    "esModuleInterop": true,
+
+    // -- Performance and Developer Experience -----------------------------------
+
+    // "skipLibCheck": Skip type-checking of .d.ts declaration files from
+    // node_modules. Dramatically speeds up compilation without sacrificing
+    // safety in your own source code.
+    "skipLibCheck": true,
+
+    // "forceConsistentCasingInFileNames": Ensures that the casing of import
+    // paths matches the actual file names on disk. Prevents subtle bugs when
+    // developing on case-insensitive filesystems (macOS / Windows) and
+    // deploying to case-sensitive ones (Linux).
+    "forceConsistentCasingInFileNames": true,
+
+    // "resolveJsonModule": Allows importing .json files as typed modules.
+    // Useful for config files, fixtures, and static data.
+    "resolveJsonModule": true,
+
+    // "isolatedModules": Treats every file as a standalone module (no
+    // cross-file type-resolution that a bundler cannot perform). Required
+    // by most transpile-only tools (esbuild, Babel, swc, Vite) to ensure
+    // correctness when skipping full tsc type-checking.
+    "isolatedModules": true,
+
+    // -- Output -----------------------------------------------------------------
+
+    // "declaration": Emit .d.ts type-declaration files alongside compiled
+    // .js output. Essential for library packages consumed by other TypeScript
+    // projects — enables IntelliSense and type safety for downstream consumers.
+    "declaration": true,
+
+    // "declarationMap": Emit .d.ts.map source maps that link declarations
+    // back to the original .ts source. Enables "Go to Definition" in IDEs
+    // to navigate to the implementation source rather than the declaration
+    // file, even when consuming a compiled package.
+    "declarationMap": true,
+
+    // "sourceMap": Emit .js.map source maps that map compiled JavaScript back
+    // to the original TypeScript source. Enables readable stack traces and
+    // in-browser / Node.js debugging of the original source.
+    "sourceMap": true
+  }
+}

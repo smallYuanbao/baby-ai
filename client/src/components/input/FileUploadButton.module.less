@@ -1,0 +1,20 @@
+// Styles for the FileUploadButton component.
+// Renders a visually hidden <input type="file"> alongside an IconButton trigger.
+// The native input is hidden; clicking the IconButton programmatically opens
+// the OS file picker via a ref.
+
+@import '../../styles/variables.less';
+
+// --- Native file input ---
+.input {
+  // Hide the native browser file input.
+  // The visual trigger is the IconButton rendered beside it.
+  display: none;
+}
+
+// --- Icon ---
+.icon {
+  // Sized to @space-5 (1.25rem / 20px) to match other toolbar icon dimensions.
+  width: @space-5;
+  height: @space-5;
+}

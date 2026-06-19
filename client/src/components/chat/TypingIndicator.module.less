@@ -1,0 +1,74 @@
+/**
+ * TypingIndicator — styles for the AI "thinking" bubble shown in the chat stream.
+ *
+ * Design goals:
+ * - Match the brand voice with soft, rounded shapes from the design system.
+ * - Keep the indicator compact so it sits naturally inline between messages.
+ */
+
+@import '../../styles/variables.less';
+
+/* --------------------------------------------------------------------------
+ * Row wrapper
+ * -------------------------------------------------------------------------- */
+.wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+/* --------------------------------------------------------------------------
+ * Mascot avatar
+ * -------------------------------------------------------------------------- */
+.avatar {
+  width: 2rem;               /* 32px — matches a compact avatar ring */
+  height: 2rem;
+  border-radius: 1.25rem;    /* pill shape (20px); larger than perfect circle to look softer */
+  background: @primary-100;  /* light brand tint (cream / warm beige) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;          /* clip the SVG icon if it overflows */
+}
+
+.avatarIcon {
+  width: 1.5rem;             /* 24px — leaves 4px padding inside the 32px avatar */
+  height: 1.5rem;
+}
+
+/* --------------------------------------------------------------------------
+ * Thinking bubble
+ * -------------------------------------------------------------------------- */
+.bubble {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+  background: @white;
+  border-radius: 1.25rem;          /* rounded pill matching the avatar shape */
+  border-top-left-radius: 0.375rem; /* flattened top-left corner — chat‑bubble convention (sent messages are top-right) */
+  border: 1px solid @primary-100;  /* subtle outline to define the bubble against the background */
+}
+
+.thinkingText {
+  font-size: 0.75rem;   /* 12px — small label fits alongside the dots */
+  color: @gray-400;     /* muted grey so the animated dots draw attention first */
+  margin-right: 0.25rem; /* slight gap before the first dot starts bouncing */
+}
+
+/* --------------------------------------------------------------------------
+ * Bouncing dots
+ * -------------------------------------------------------------------------- */
+.dot {
+  width: 0.375rem;        /* 6px — tiny dots that feel friendly, not heavy */
+  height: 0.375rem;
+  border-radius: 9999px;  /* fully round */
+  background: @primary-400; /* saturated brand colour so the dots pop */
+}

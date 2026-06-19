@@ -1,0 +1,90 @@
+/**
+ * App.module.less
+ *
+ * CSS Modules stylesheet for the root App component of the Baby AI client.
+ *
+ * This file defines layout and visibility utility classes used by the
+ * top-level application shell. Styles are scoped locally via CSS Modules,
+ * preventing class name collisions across components.
+ *
+ * Dependencies:
+ *   - ./styles/variables.less  — shared design tokens (colors, spacing,
+ *     breakpoints, etc.) consumed by all Less modules in the project.
+ *
+ * Conventions:
+ *   - Class names use camelCase to match CSS Modules import syntax in
+ *     TypeScript (e.g. `import styles from './App.module.less'`).
+ *   - All values that might vary across themes or layouts should be defined
+ *     in variables.less rather than hardcoded here.
+ *
+ * @module App.module.less
+ */
+
+/* ---------------------------------------------------------------------------
+ * Dependencies
+ * --------------------------------------------------------------------------- */
+
+// Shared design tokens: color palette, spacing scale, typography, breakpoints.
+// All Less variables referenced in this file originate from this import.
+@import './styles/variables.less';
+
+/* ---------------------------------------------------------------------------
+ * Layout: Tab Panel Container
+ * ---------------------------------------------------------------------------
+ *
+ * .tabPanel establishes the primary content area for tabbed navigation.
+ * It is designed to fill the available space within a flex parent and
+ * constrain its own children (the active tab's content) to the panel bounds.
+ *
+ * Layout model:
+ *   - Parent flex layout makes .tabPanel expand into remaining space (flex: 1).
+ *   - .tabPanel itself is a column-direction flex container so its children
+ *     stack vertically and can themselves use flex to fill the panel.
+ *   - overflow: hidden clips content that exceeds the panel bounds, which
+ *     is essential for scrollable inner regions (the child, not this wrapper,
+ *     should handle scrolling).
+ */
+
+.tabPanel {
+  /* Expand to fill the remaining space in the parent flex container.
+   * Using the shorthand `flex: 1` sets flex-grow: 1, flex-shrink: 1,
+   * and flex-basis: 0%, so the panel takes an equal share of available
+   * space alongside any siblings. */
+  flex: 1;
+
+  /* Become a flex container so children can also participate in the
+   * flex layout. This allows individual tab content areas to fill the
+   * panel vertically without explicit height calculations. */
+  display: flex;
+
+  /* Stack children vertically — typical for page/section layouts where
+   * a header, body, and footer occupy sequential rows. */
+  flex-direction: column;
+
+  /* Clip overflow rather than showing scrollbars on the panel itself.
+   * Inner scrollable regions (e.g., chat message lists) manage their own
+   * overflow to avoid double-scrollbar issues. */
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------------------
+ * Visibility Utility: Hidden
+ * ---------------------------------------------------------------------------
+ *
+ * .hidden is a utility class that completely removes an element from the
+ * layout and rendering tree. It is distinct from visibility: hidden (which
+ * preserves the element's layout space) and opacity: 0 (which leaves the
+ * element interactive).
+ *
+ * Typical usage:
+ *   - Toggling tab panel visibility based on the active tab index.
+ *   - Conditionally showing/hiding overlays or modal wrappers via
+ *     JavaScript-driven class toggling.
+ */
+
+.hidden {
+  /* `display: none` removes the element from both the visual output and
+   * the layout flow. The element will not occupy space, respond to pointer
+   * events, or be read by screen readers. */
+  display: none;
+}

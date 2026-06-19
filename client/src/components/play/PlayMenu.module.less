@@ -1,0 +1,98 @@
+// PlayMenu.module.less
+// Styles for the PlayMode selection screen — a scrollable list of activity cards
+// (Story, Riddle, Babytalk) with gradient backgrounds, icons, titles, and descriptions.
+// Organised as a vertical flex column wrapping themed .menuItem cards.
+
+@import '../../styles/variables.less';
+
+// ---------------------------------------------------------------------------
+// Layout wrapper — scrollable vertical column
+// ---------------------------------------------------------------------------
+.wrapper {
+  flex: 1;                      // fill remaining space in parent flex container
+  overflow-y: auto;             // scroll when content overflows vertically
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;       // stack menu items vertically
+  gap: 0.75rem;                 // spacing between menu cards
+}
+
+// ---------------------------------------------------------------------------
+// Menu card — tap target for each play mode
+// ---------------------------------------------------------------------------
+.menuItem {
+  width: 100%;
+  padding: 1rem;
+  border-radius: 1.25rem;
+  text-align: left;
+  transition: all 200ms;        // smooth hover lift / shadow
+
+  &:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); // subtle elevation on hover
+    transform: scale(1.02);                           // gentle grow effect
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Inner layout — icon + text + arrow
+// ---------------------------------------------------------------------------
+.menuItemInner {
+  display: flex;
+  align-items: center;          // vertically centre icon, text, and arrow
+  gap: 0.75rem;                 // horizontal gap between icon and text block
+}
+
+// ---------------------------------------------------------------------------
+// Icon — emoji / symbol for the activity
+// ---------------------------------------------------------------------------
+.menuIcon {
+  font-size: 1.875rem;          // large icon (30px at default root size)
+}
+
+// ---------------------------------------------------------------------------
+// Text block — title + description pair
+// ---------------------------------------------------------------------------
+.menuText {
+  // container for .menuTitle and .menuDesc — no extra styling needed
+}
+
+.menuTitle {
+  font-weight: 600;
+  color: @gray-800;             // high-contrast title using design token
+}
+
+.menuDesc {
+  font-size: 0.75rem;           // small secondary text
+  color: @gray-500;             // muted description using design token
+  margin-top: 0.125rem;         // tiny gap between title and description
+}
+
+// ---------------------------------------------------------------------------
+// Arrow — trailing chevron indicating tappability
+// ---------------------------------------------------------------------------
+.menuArrow {
+  margin-left: auto;            // push arrow to the far end of the row
+  color: @gray-300;             // light, subtle arrow
+}
+
+// ---------------------------------------------------------------------------
+// Card gradient variants — colour-coded by activity type
+// ---------------------------------------------------------------------------
+
+// Story mode — warm amber/yellow gradient
+.cardStory {
+  background: linear-gradient(to bottom right, #fffbeb, #fff7ed);
+  border: 1px solid #fde68a;
+}
+
+// Riddle mode — cool mint/green gradient
+.cardRiddle {
+  background: linear-gradient(to bottom right, #f0fdf4, #ecfdf5);
+  border: 1px solid #a7f3d0;
+}
+
+// Babytalk mode — soft pink/rose gradient
+.cardBabytalk {
+  background: linear-gradient(to bottom right, #fdf2f8, #fff1f2);
+  border: 1px solid #fbcfe8;
+}

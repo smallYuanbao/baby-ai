@@ -1,0 +1,76 @@
+/**
+ * MessageList — Chat message container styles.
+ *
+ * Provides the scrollable message area, empty-state layout, a spacer utility,
+ * and a floating "scroll to bottom" button that appears when the user has
+ * scrolled up.
+ */
+
+@import '../../styles/variables.less';
+
+/* -------------------------------------------------------------------------
+ * Layout containers
+ * ------------------------------------------------------------------------- */
+
+.wrapper {
+  flex: 1;            /* fill remaining vertical space in parent flex column */
+  position: relative; /* positioning context for absolutely-placed children */
+}
+
+.emptyWrapper {
+  flex: 1;            /* same fill behaviour as .wrapper when list is empty */
+  overflow-y: auto;
+}
+
+/* -------------------------------------------------------------------------
+ * Scrollable message area
+ * ------------------------------------------------------------------------- */
+
+.scrollArea {
+  /* Stretch to fill the .wrapper's bounds */
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow-y: auto;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+/* -------------------------------------------------------------------------
+ * Utility spacer
+ * ------------------------------------------------------------------------- */
+
+.spacer {
+  height: 0.5rem;  /* small gap to prevent content from being flush at edges */
+}
+
+/* -------------------------------------------------------------------------
+ * Floating "scroll to bottom" button
+ * ------------------------------------------------------------------------- */
+
+.scrollButton {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);     /* centre horizontally when left is 50% */
+  padding-left: 1rem;
+  padding-right: 1rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  background: @white;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);  /* subtle elevated shadow */
+  border-radius: 1.25rem;          /* fully rounded pill shape */
+  border: 1px solid @primary-100;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: @primary-600;
+  cursor: pointer;
+  transition: all 200ms;           /* smooth hover / state transition */
+  z-index: 10;                     /* float above message content */
+
+  &:hover {
+    background: @primary-50;
+  }
+}

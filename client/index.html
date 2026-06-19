@@ -1,0 +1,75 @@
+<!--
+/**
+ * baby-ai — Client Entry Point (index.html)
+ *
+ * @description
+ * This is the single HTML entry point for the Baby AI single-page application (SPA).
+ * It defines the minimal shell that bootstraps the React application:
+ *  1. <head> — Metadata, viewport configuration, font preloading, and SEO tags.
+ *  2. <body> — An empty mount point (<div id="root">) and the module script that loads React.
+ *
+ * @role
+ * This file is NOT a template. It contains no server-side includes or build-time
+ * placeholders. The entire UI is rendered client-side by React from /src/main.tsx.
+ *
+ * @architecture
+ * Vite (or equivalent bundler) transforms the TypeScript module reference
+ * (src="/src/main.tsx") into a production JS bundle during build. In development,
+ * the module is served directly via native ES module support in the browser.
+ *
+ * @target
+ * Chinese-speaking parents with young children. The page defaults to Simplified
+ * Chinese (`lang="zh-CN"`) and loads Noto Sans SC for optimal CJK rendering.
+ */-->
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <!-- Character encoding: must appear within the first 1024 bytes of the document -->
+    <meta charset="UTF-8" />
+
+    <!-- Favicon served as an SVG for crisp rendering at all resolutions -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- Responsive-viewport meta: sets initial scale to 1.0 and disables user scaling
+         (common for SPAs where pinch-zoom can interfere with touch interactions) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- SEO: description used by search engines and social-media preview cards -->
+    <meta name="description" content="育儿AI助手 - 用科学知识陪伴宝宝成长" />
+
+    <!-- Performance: preconnect to Google Fonts origins so that the TLS handshake
+         and DNS lookup happen before the CSS @import is parsed -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <!--
+      Font stack rationale:
+      - Nunito (weights 400/500/600/700): Rounded, friendly sans-serif for headings
+        and UI labels. Good legibility at small sizes.
+      - Noto Sans SC (weights 400/500/700): Full-coverage Simplified Chinese
+        typeface. Loaded alongside Nunito so CJK text never falls back to a
+        mismatched system font.
+      - display=swap: Text renders immediately in a fallback font while the web
+        font loads, avoiding the "flash of invisible text" (FOIT) penalty.
+    -->
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
+
+    <title>育儿AI助手 - Baby AI</title>
+  </head>
+  <body>
+    <!-- React mount point: the root <div> is a DOM container into which
+         ReactDOM.createRoot() renders the entire application tree. It must remain
+         empty in the HTML source — no server-rendered children. -->
+    <div id="root"></div>
+
+    <!-- Application entry script.
+         type="module" enables:
+         - Native ES module resolution (import/export).
+         - Deferred execution by default (the script behaves as if defer were set,
+           so it runs after the DOM is fully parsed).
+         - Strict mode ("use strict") is implicit.
+         Vite replaces this path with a hashed bundle in production builds. -->
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

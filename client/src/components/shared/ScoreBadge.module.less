@@ -1,0 +1,57 @@
+/**
+ * ScoreBadge 组件样式。
+ *
+ * 定义三段式评分徽章的视觉表达：高（绿）、中（黄/琥珀）、低（灰），
+ * 包含内联布局、圆点指示器与百分比文字。
+ */
+
+@import '../../styles/variables.less';
+
+/* ================================================================
+   Base badge
+   ================================================================ */
+
+.badge {
+  display: inline-flex;             /* sit inline with text but use flex for internal layout */
+  align-items: center;              /* vertically centre dot, value, and percent suffix */
+  gap: @space-1;                     /* spacing between dot, value, and percent suffix */
+  padding: @space-0d5 @space-2;     /* compact vertical, relaxed horizontal */
+  border-radius: @radius-full;      /* 胶囊形 */
+  font-size: @text-xs;
+  font-weight: 500;                 /* medium weight — bolder than body, lighter than headings */
+}
+
+/* ================================================================
+   Score tiers — background / text colour by range
+   ================================================================ */
+
+.high {
+  background: #ecfdf5;   /* green-50 */
+  color: #047857;         /* green-700 */
+}
+
+.medium {
+  background: #fffbeb;   /* amber-50 */
+  color: #b45309;         /* amber-700 */
+}
+
+.low {
+  background: @gray-100;  /* neutral light grey — the "no concern" tier */
+  color: @gray-500;       /* muted grey text; low emphasis so the badge recedes visually */
+}
+
+/* ================================================================
+   Decorative elements
+   ================================================================ */
+
+.dot {
+  width: 0.375rem;
+  height: 0.375rem;              /* equal width/height so the circle is perfectly round */
+  border-radius: @radius-full;   /* turn the square into a circle */
+  background: currentColor;      /* inherits tier text colour so dot auto-matches variant */
+  opacity: 0.6;                  /* slightly muted so it does not overpower the score value */
+}
+
+.percent {
+  opacity: 0.6;  /* subdued relative to the numeric value it suffixes */
+}

@@ -1,0 +1,123 @@
+/**
+ * GrowthAnalysis.module.less
+ *
+ * Styles for the GrowthAnalysis component — an AI-powered child growth report
+ * that accepts a parent prompt, shows a streaming generation indicator, and
+ * renders the final Markdown result.
+ *
+ * Dependencies: @/styles/variables.less (design tokens: colors, radii, spacing)
+ */
+
+@import '../../styles/variables.less';
+
+// ─── Layout wrapper ───────────────────────────────────────────────────────────
+
+.wrapper {
+  padding: 1rem;
+}
+
+// ─── Prompt placeholder (shown before the user submits a prompt) ──────────────
+
+.promptSection {
+  text-align: center;
+  padding: 3rem 0;
+}
+
+.promptIcon {
+  font-size: 2.5rem;
+  display: block;
+  margin-bottom: 0.75rem;
+}
+
+.promptTitle {
+  font-weight: 600;
+  color: @gray-700;
+  margin-bottom: 0.25rem;
+}
+
+.promptDesc {
+  font-size: 0.875rem;
+  color: @gray-500;
+  margin-bottom: 1rem;
+}
+
+// ─── Generating indicator (shown while the AI response is being streamed) ─────
+
+.generatingHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+// Spinner icon rotates continuously to indicate an in-progress generation
+.spinIcon {
+  font-size: 1.125rem;
+  animation: spin 1s linear infinite;
+}
+
+.generatingText {
+  font-size: 0.875rem;
+  color: @gray-500;
+}
+
+// ─── Spin keyframes ───────────────────────────────────────────────────────────
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+// ─── Result display (Markdown-rendered AI response) ───────────────────────────
+
+.resultBox {
+  padding: 1rem;
+  background: @white;
+  border-radius: 1.25rem;
+  border: 1px solid @primary-100;
+  min-height: 100px;
+}
+
+.markdownBody {
+  font-size: 0.875rem;
+}
+
+// ─── Regenerate button section ────────────────────────────────────────────────
+
+.regenSection {
+  text-align: center;
+  margin-top: 1rem;
+}
+
+// ─── Error state ──────────────────────────────────────────────────────────────
+
+.errorSection {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.errorText {
+  font-size: 0.875rem;
+  color: @red-500;
+  margin-bottom: 0.75rem;
+}
+
+// ─── Bouncing dots loader (pulsing indicator used while waiting) ──────────────
+
+.bounceDots {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: @gray-400;
+}
+
+// Individual dot — animated externally (e.g. via framer-motion) so only
+// static geometry and colour are defined here.
+.bounceDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px; // fully rounded for a circle
+  background: @primary-400;
+}

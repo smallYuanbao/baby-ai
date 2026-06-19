@@ -1,0 +1,168 @@
+@import '../../styles/variables.less';
+
+// =============================================================================
+// StoryTime.module.less
+// Styles for the StoryTime component — an AI-powered children's story generator.
+// Covers the full-screen layout: top navigation bar, age/type setup panel,
+// story display area, and action buttons.
+// =============================================================================
+
+// ---------------------------------------------------------------------------
+// Root wrapper — fills available space and constrains layout vertically.
+// ---------------------------------------------------------------------------
+.wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; // Prevent body scroll; inner areas handle their own overflow.
+}
+
+// =============================================================================
+// Top bar region
+// =============================================================================
+
+.topBar {
+  flex-shrink: 0; // Keep the bar visible; do not let the story area compress it.
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+}
+
+.backButton {
+  font-size: 0.875rem;
+  color: @gray-500;
+
+  &:hover {
+    color: @gray-700;
+  }
+}
+
+.screenTitle {
+  flex: 1;
+  text-align: center;
+  font-weight: 600;
+  color: @gray-800;
+}
+
+// Balances the back button width so the title stays visually centered.
+.spacer {
+  width: 3rem;
+}
+
+// =============================================================================
+// Setup panel (age range, story type, custom subject input)
+// =============================================================================
+
+.setupPanel {
+  flex-shrink: 0; // Keep the controls visible; the story area scrolls instead.
+  padding: 0 1rem 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+// Small-cap label above a row of option buttons (e.g. "Age range").
+.label {
+  font-size: 0.75rem;
+  color: @gray-400;
+  margin-bottom: 0.25rem;
+  display: block; // Ensures the label sits on its own line above the options.
+}
+
+.optionGroup {
+  display: flex;
+  gap: 0.5rem;
+}
+
+// Shared pill-button styles for age and story-type selectors.
+.optionButton {
+  flex: 1;
+  padding: 0.5rem 0;
+  border-radius: 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 200ms;
+
+  // ---- Age selector states ----
+
+  &.activeAge {
+    background: @primary-500;
+    color: @white;
+  }
+
+  &.inactiveOption {
+    background: @gray-50;
+    color: @gray-500;
+
+    &:hover {
+      background: @gray-100;
+    }
+  }
+
+  // ---- Story-type selector states ----
+
+  &.activeType {
+    background: @primary-100;
+    color: @primary-700;
+    border: 2px solid @primary-300;
+  }
+
+  &.inactiveType {
+    background: @gray-50;
+    color: @gray-500;
+    border: 2px solid transparent; // Keeps layout stable when switching between active/inactive.
+  }
+}
+
+// Custom subject text input (e.g. "a dragon who loves baking").
+.input {
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  background: @surface-light;
+  border-radius: 1rem;
+  border: 1px solid @primary-100;
+
+  &:focus {
+    outline: none;
+    border-color: @primary-300;
+  }
+}
+
+// =============================================================================
+// Story output area
+// =============================================================================
+
+// Scrollable container for the generated story.
+.storyContent {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem 1rem;
+}
+
+// Card that wraps the generated story text.
+.storyBox {
+  padding: 1rem;
+  background: @white;
+  border-radius: 1.25rem;
+  border: 1px solid @primary-100;
+}
+
+// Action buttons below the story (e.g. "Read aloud", "New story").
+.storyActions {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+// Utility: makes a button fill the full width of the story card.
+.fullWidth {
+  width: 100%;
+}
+
+// Rendered Markdown body text for the story narrative.
+.markdownBody {
+  font-size: 0.875rem;
+  line-height: 1.625;
+}

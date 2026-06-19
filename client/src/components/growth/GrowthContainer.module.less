@@ -1,0 +1,103 @@
+// GrowthContainer.module.less
+// Styles for the GrowthContainer component — the top-level layout for the growth tracking view.
+// Provides a flex-column wrapper with a fixed toolbar and a scrollable content area.
+
+@import '../../styles/variables.less';
+
+// ---------------------------------------------------------------------------
+// Root wrapper
+// ---------------------------------------------------------------------------
+
+.wrapper {
+  flex: 1;                       // fill available space in parent flex container
+  display: flex;
+  flex-direction: column;        // stack toolbar on top, content below
+  overflow: hidden;              // prevent wrapper from scrolling; let .content handle it
+}
+
+// ---------------------------------------------------------------------------
+// Toolbar
+// ---------------------------------------------------------------------------
+
+.toolbar {
+  flex-shrink: 0;                // keep the toolbar fixed; never let it shrink
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid @primary-50;
+}
+
+.toolbarRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between; // back button left, child name center/right
+  margin-bottom: 0.75rem;
+}
+
+.backButton {
+  font-size: 0.875rem;
+  color: @gray-500;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;                   // spacing between arrow icon and label text
+
+  &:hover {
+    color: @gray-700;             // darken on hover for affordance
+  }
+}
+
+.childName {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: @gray-700;
+}
+
+.recordCount {
+  font-size: 0.75rem;
+  color: @gray-400;              // subdued — secondary metadata
+}
+
+// ---------------------------------------------------------------------------
+// View toggle (chart / table switcher)
+// ---------------------------------------------------------------------------
+
+.viewToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: @gray-50;
+  border-radius: 1rem;           // pill shape
+  padding: 0.125rem;             // thin inner gap around the tabs
+}
+
+.viewTab {
+  flex: 1;                       // tabs share available width evenly
+  padding: 0.375rem 0;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 0.5rem;
+  transition: all 200ms;         // smooth color/background switch on toggle
+
+  // Currently selected tab
+  &.active {
+    background: @white;
+    color: @primary-600;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); // subtle lift
+  }
+
+  // Unselected tab
+  &.inactive {
+    color: @gray-400;
+
+    &:hover {
+      color: @gray-600;          // hint that the tab is interactive
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Scrollable content area
+// ---------------------------------------------------------------------------
+
+.content {
+  flex: 1;                       // take remaining vertical space
+  overflow-y: auto;              // scroll independently from the toolbar
+}

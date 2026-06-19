@@ -1,0 +1,150 @@
+// ============================================================
+//
+//  FilePreview.module.less — Styles for the FilePreview chip
+//
+//  @file      client/src/components/input/FilePreview.module.less
+//  @overview  Styles a compact "chip" that previews an attached file
+//             inside the chat input area.  It shows a thumbnail (or
+//             a fallback document icon), the file name, an upload‑state
+//             label, and a remove button.
+//
+//  Structure  .wrapper          — horizontal flex chip container
+//             .thumbnail        — image preview for recognised types
+//             .placeholder      — fallback card when no preview is available
+//             .placeholderIcon  — document SVG inside the placeholder
+//             .fileInfo         — text column (file name + status)
+//             .fileName         — single-line truncated file name
+//             .fileStatus       — upload / ready label
+//               .uploading        — orange "uploading…" state
+//               .ready            — gray "ready" state
+//             .removeButton     — ✕ dismiss button
+//
+// ============================================================
+
+@import '../../styles/variables.less';
+
+// ------------------------------------------------------------------
+// Chip Container
+// ------------------------------------------------------------------
+// A single-row flex chip with the brand's warm tint and border.
+// The inner elements are: [preview block] [text column] [remove ✕].
+// ------------------------------------------------------------------
+.wrapper {
+  display: flex;
+  align-items: center;
+  gap: @space-2;            // 8px — tight gap so the chip stays compact
+  padding: @space-2 @space-3; // 8px 12px — vertical padding is tight because the content is one line tall
+  background: @primary-50;  // warm off-white tint that matches the chat surface
+  border-radius: @radius-xl; // 16px — rounded "pill-ish" chip, matches button radius
+  border: 1px solid @primary-100; // subtle border so the chip is visible on light backgrounds
+}
+
+// ------------------------------------------------------------------
+// Preview Block — Thumbnail
+// ------------------------------------------------------------------
+// Shown when the browser can generate an image preview (image files,
+// PDF cover pages rendered as data‑URLs, etc.).
+// ------------------------------------------------------------------
+.thumbnail {
+  width: @space-10;    // 40px — square preview, large enough to recognise but small enough for a chip
+  height: @space-10;   // 40px
+  border-radius: 0.5rem; // 8px — slightly softer than the outer chip so it reads as "a picture inside a card"
+  object-fit: cover;     // crop to fill the square; prevents distortion of non‑square images
+  flex-shrink: 0;        // never let the thumbnail shrink when the file name is very long
+}
+
+// ------------------------------------------------------------------
+// Preview Block — Placeholder (no preview available)
+// ------------------------------------------------------------------
+// A filled square with a document SVG icon.  Used for non-image
+// files (PDFs in some browsers, .doc, .txt, etc.).
+// ------------------------------------------------------------------
+.placeholder {
+  width: @space-10;    // 40px — matches .thumbnail so the layout is stable between states
+  height: @space-10;   // 40px
+  border-radius: 0.5rem; // 8px — matches .thumbnail
+  background: @primary-100; // slightly deeper tint so the icon contrasts against the card
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+// Document icon rendered inside the placeholder square.
+// Uses @primary-500 (brand orange) so it is clearly visible on
+// the light @primary-100 background.
+.placeholderIcon {
+  width: @space-5;    // 20px — icon is half the container width for balanced whitespace
+  height: @space-5;   // 20px
+  color: @primary-500;
+}
+
+// ------------------------------------------------------------------
+// Text Column — File Name & Status
+// ------------------------------------------------------------------
+// Takes up remaining horizontal space between the preview block
+// and the remove button.
+// ------------------------------------------------------------------
+.fileInfo {
+  flex: 1;       // expand to fill the gap
+  min-width: 0;  // required so the flex child allows text truncation (prevents overflow)
+}
+
+// Single-line file name that truncates with an ellipsis when it
+// would otherwise push the remove button outside the chip.
+.fileName {
+  font-size: @text-xs;   // 12px — small so long names still fit
+  font-weight: 500;      // medium weight for readability at this small size
+  color: @gray-700;      // high contrast against the light chip background
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Upload-state label below the file name.
+.fileStatus {
+  font-size: @text-xs; // 12px — same size as the name; secondary hierarchy
+}
+
+// ------------------------------------------------------------------
+// Status Variants
+// ------------------------------------------------------------------
+// Colour the status text based on the upload phase.
+// ------------------------------------------------------------------
+
+// Orange text while the file is still uploading — matches the
+// primary‑action colour to signal an in‑progress operation.
+.uploading {
+  color: @primary-500;
+}
+
+// Muted gray text once the file is fully uploaded — signals a
+// settled, non‑actionable state.
+.ready {
+  color: @gray-400;
+}
+
+// ------------------------------------------------------------------
+// Remove Button
+// ------------------------------------------------------------------
+// A small ✕ button at the trailing edge of the chip.  Stays
+// neutral by default and turns red on hover to indicate the
+// destructive action.
+// ------------------------------------------------------------------
+.removeButton {
+  width: @space-6;     // 24px — compact square target
+  height: @space-6;    // 24px
+  border-radius: 0.5rem; // 8px — matches the preview block roundedness
+  color: @gray-400;      // muted icon colour so the chip doesn't feel cluttered
+  display: flex;
+  align-items: center;
+  justify-content: center; // centre the "✕" character inside the button
+  transition: color, background-color, border-color @transition-base; // 200ms — snappy feedback
+
+  // On hover, turn red to warn the user this is a destructive action.
+  // The red-50 background creates a subtle red glow around the button.
+  &:hover {
+    color: @red-500;
+    background: @red-50;
+  }
+}

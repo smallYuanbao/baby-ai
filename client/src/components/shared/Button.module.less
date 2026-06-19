@@ -1,0 +1,107 @@
+// Button.module.less
+// Styles for the shared Button component.
+// Defines the base button appearance plus variant (primary / secondary / ghost) and size
+// (sm / md / lg) modifiers. All tokens are sourced from the global design-token LESS
+// variables so the button stays visually consistent with the rest of the UI.
+
+@import '../../styles/variables.less';
+
+// ---------------------------------------------------------------------------
+// Base button
+// ---------------------------------------------------------------------------
+
+.button {
+  font-weight: 600;                // bold but not black — keeps labels crisp
+  transition: all @transition-base; // smooth hover / active / disable state changes
+  display: inline-flex;            // so icon + text children sit side-by-side
+  align-items: center;             // vertical centering for icon + label
+  justify-content: center;         // horizontal centering for the content block
+  gap: @space-2;                   // spacing between adjacent icon and label
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;                  // visually de-emphasise disabled buttons
+    cursor: not-allowed;           // prevent the pointer cursor on disabled state
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Variants — visual flavour (fill, outline, transparent)
+// ---------------------------------------------------------------------------
+
+// Primary: filled accent button for the main call-to-action.
+.primary {
+  background: @primary-500;
+  color: @white;
+  box-shadow: @shadow-sm;          // subtle lift to indicate interactivity
+
+  &:hover {
+    background: @primary-600;      // darken on hover for tactile feedback
+  }
+
+  &:active {
+    background: @primary-700;      // darker still while pressed
+  }
+}
+
+// Secondary: soft tinted button for supporting actions.
+.secondary {
+  background: @primary-50;         // lightest primary tint
+  color: @primary-700;             // high-contrast text against the light bg
+
+  &:hover {
+    background: @primary-100;
+  }
+
+  &:active {
+    background: @primary-200;
+  }
+}
+
+// Ghost: transparent button for tertiary or inline actions.
+.ghost {
+  background: transparent;
+  color: @gray-500;                // neutral tone — minimal visual weight
+
+  &:hover {
+    background: @gray-100;         // faint background appears on hover
+  }
+
+  &:active {
+    background: @gray-200;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Sizes — padding, font-size, and border-radius presets
+// ---------------------------------------------------------------------------
+
+// Small — compact button, e.g. table actions or inline forms.
+.sm {
+  padding-left: @space-3;
+  padding-right: @space-3;
+  padding-top: @space-1d5;
+  padding-bottom: @space-1d5;
+  font-size: @text-sm;
+  border-radius: @radius-xl;       // slightly tighter rounding for a smaller shape
+}
+
+// Medium — default size for most contexts.
+.md {
+  padding-left: @space-5;
+  padding-right: @space-5;
+  padding-top: @space-2d5;
+  padding-bottom: @space-2d5;
+  font-size: @text-sm;
+  border-radius: @radius-2xl;
+}
+
+// Large — prominent button, e.g. hero CTAs or wide cards.
+.lg {
+  padding-left: @space-6;
+  padding-right: @space-6;
+  padding-top: @space-3;
+  padding-bottom: @space-3;
+  font-size: @text-base;           // larger label for high-emphasis placement
+  border-radius: @radius-2xl;
+}

@@ -1,0 +1,21 @@
+// MascotAnimation.module.less
+//
+// Styles for the MascotAnimation component.
+// Controls the mascot character's transition behavior and SVG sizing
+// within the play/interaction area.
+
+// ---- Shared design tokens ----
+@import '../../styles/variables.less';
+
+// ---- Mascot container ----
+// Wraps the animated mascot SVG to provide a smooth cross-state transition.
+.mascot {
+  transition: all 500ms; // smoothly animate all properties over 500ms
+}
+
+// ---- Mascot SVG element ----
+// Constrains the SVG graphic to a consistent, compact size.
+.svg {
+  width: 5rem;
+  height: 5rem;
+}

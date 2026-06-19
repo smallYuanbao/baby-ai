@@ -1,0 +1,71 @@
+/**
+ * ReferenceCard.module.less
+ *
+ * Styles for the ReferenceCard component — a compact card that displays a
+ * contextual reference (e.g. a document or knowledge-base entry) with a
+ * numbered badge, a title, and a truncated text snippet.
+ */
+
+@import '../../styles/variables.less';
+
+/* ---- Card container ---- */
+
+.card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;                  /* 10px — tight spacing between badge and body */
+  padding: 0.625rem;
+  background: rgba(255, 247, 237, 0.5);   /* warm amber tint, semi-transparent */
+  border-radius: 1rem;            /* fully rounded corners for a pillowy card */
+  border: 1px solid rgba(255, 237, 213, 0.5); /* subtle warm border */
+}
+
+/* ---- Numbered reference badge ---- */
+
+.badge {
+  flex-shrink: 0;          /* prevent badge from shrinking when title overflows */
+  width: 1.5rem;           /* 24px — small fixed-size square */
+  height: 1.5rem;
+  border-radius: 0.5rem;   /* 8px — slightly rounded square */
+  background: @primary-500;
+  color: @white;
+  font-size: 0.75rem;      /* 12px */
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center; /* center the reference number inside the badge */
+}
+
+/* ---- Card body (text area) ---- */
+
+.body {
+  flex: 1;
+  min-width: 0;   /* allow flex child to shrink below intrinsic size so
+                      text-overflow works on the title */
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;            /* 8px between title and any trailing element */
+  margin-bottom: 0.25rem; /* 4px — small gap before the snippet */
+}
+
+.title {
+  font-size: 0.875rem;    /* 14px */
+  font-weight: 600;
+  color: @gray-800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;    /* single-line truncation */
+}
+
+.snippet {
+  font-size: 0.75rem;     /* 12px */
+  color: @gray-500;       /* muted secondary text */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;          /* clamp to 2 lines; browser truncates with "…" */
+  -webkit-box-orient: vertical;   /* required for line-clamp to take effect */
+  overflow: hidden;
+  line-height: 1.625;             /* generous line-height for readability at 12px */
+}

@@ -1,0 +1,103 @@
+@import '../../styles/variables.less';
+
+// ============================================================
+//
+//  TabBar.module.less — Bottom Navigation Bar
+//
+//  @component TabBar
+//  @overview  Styles for the bottom tab bar that provides primary
+//             navigation between the three main sections of the app:
+//             Chat (💬), Growth (📈), and Play (🎮).
+//             The bar is fixed at the bottom of the viewport and
+//             renders a horizontal row of icon+label tabs with an
+//             active-state indicator.
+//
+//  @states    Each tab supports three visual states:
+//             - inactive (gray icon/label, hover highlight)
+//             - active  (brand-orange icon/label, scale pop, indicator bar)
+//
+//  @layout    The nav bar uses flexbox with equal-width tabs.
+//             flex-shrink: 0 prevents the bar from collapsing when
+//             the content area above it grows.
+//
+// ============================================================
+
+// ---------------------------------------------------------------------------
+// Layout: Nav container
+// ---------------------------------------------------------------------------
+.nav {
+  flex-shrink: 0; // prevent bar from shrinking when main content overflows
+  display: flex;
+  border-top: 1px solid @primary-50; // subtle brand-tinted divider from content
+  background: @white;
+}
+
+// ---------------------------------------------------------------------------
+// Layout: Individual tab button
+// ---------------------------------------------------------------------------
+.tab {
+  flex: 1; // equal-width tabs — each takes the same horizontal space
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-top: @space-2d5; // 10px — vertical breathing room for icon+label
+  padding-bottom: @space-2d5;
+  transition: all @transition-base; // smooth colour/background changes on toggle
+  gap: @space-1; // 4px — tight vertical gap between icon and label
+  cursor: pointer;
+}
+
+// ---------------------------------------------------------------------------
+// States: Active tab
+// ---------------------------------------------------------------------------
+.tabActive {
+  color: @primary-500; // brand orange for icon + label
+  background: rgba(255, 247, 237, 0.5); // @primary-50 at 50% opacity — soft brand wash
+}
+
+// ---------------------------------------------------------------------------
+// States: Inactive tab
+// ---------------------------------------------------------------------------
+.tabInactive {
+  color: @gray-400; // muted gray for unselected tabs
+
+  &:hover {
+    color: @gray-600; // darken icon/label on hover for touch feedback
+    background: @gray-50; // subtle near-white lift on hover
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Icon
+// ---------------------------------------------------------------------------
+.icon {
+  font-size: @text-xl; // 20px — large enough to be tappable and legible
+  transition: transform @transition-base; // smooth scale-pop on activation
+}
+
+.iconActive {
+  transform: scale(1.1); // subtle pop — draws attention to the active tab icon
+}
+
+// ---------------------------------------------------------------------------
+// Label
+// ---------------------------------------------------------------------------
+.label {
+  font-size: @text-xs; // 12px — compact label that fits below the icon
+  font-weight: 500;
+}
+
+.labelActive {
+  font-weight: 600; // bolder weight reinforces the active state beyond colour alone
+}
+
+// ---------------------------------------------------------------------------
+// Active indicator bar
+// ---------------------------------------------------------------------------
+.indicator {
+  width: @space-6; // 24px — short bar centred under the tab (not full-width)
+  height: @space-0d5; // 2px — thin underline accent
+  background: @primary-500; // matches the active brand colour
+  border-radius: @radius-full; // pill shape — soft rounded ends
+}
