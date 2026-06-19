@@ -2,6 +2,15 @@
 
 基于 RAG + ReAct 架构的育儿知识 AI 聊天应用，具备意图路由、多轮记忆和降级策略，用科学知识和温暖陪伴帮助父母解答育儿问题。
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/node-%E2%89%A520-green.svg)](https://nodejs.org/)
+[![React](https://img.shields.io/badge/react-18-61dafb.svg?logo=react)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/typescript-5.x-3178c6.svg?logo=typescript)](https://www.typescriptlang.org/)
+[![Less](https://img.shields.io/badge/less-CSS%20Modules-1d365d.svg?logo=less)](https://lesscss.org/)
+[![Python](https://img.shields.io/badge/python-3.x-3776ab.svg?logo=python)](https://www.python.org/)
+[![Docker](https://img.shields.io/badge/docker-infra-2496ed.svg?logo=docker)](https://www.docker.com/)
+[![DeepSeek](https://img.shields.io/badge/AI-DeepSeek-536dfe.svg)](https://platform.deepseek.com/)
+
 ## 技术栈
 
 | 层级 | 技术 |
