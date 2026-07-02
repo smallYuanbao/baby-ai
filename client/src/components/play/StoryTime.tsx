@@ -159,7 +159,11 @@ export function StoryTime({ onBack }: StoryTimeProps) {
           {/* Scrollable story card */}
           <div className={styles.storyBox}>
             <div className={`markdown-content ${styles.markdownBody}`}>
-              <ReactMarkdown>{content || '正在构思故事...'}</ReactMarkdown>
+              {done ? (
+                <ReactMarkdown>{content}</ReactMarkdown>
+              ) : (
+                content || '正在构思故事...'
+              )}
             </div>
           </div>
 

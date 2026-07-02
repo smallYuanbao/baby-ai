@@ -116,9 +116,9 @@ export function GrowthAnalysis({ childId, childName }: GrowthAnalysisProps) {
           </div>
           <div className={styles.resultBox}>
             {content ? (
-              // 已有部分内容时，实时渲染 Markdown
+              // 流式输出中：纯文本渲染，避免逐 token 重复解析 Markdown
               <div className={`markdown-content ${styles.markdownBody}`}>
-                <ReactMarkdown>{content}</ReactMarkdown>
+                {content}
               </div>
             ) : (
               // 尚无内容时，展示加载动画（三点弹跳）

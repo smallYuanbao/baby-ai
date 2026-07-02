@@ -108,6 +108,22 @@
   word-break: break-word;
 }
 
+// Blinking cursor shown at the end of streaming text before markdown rendering.
+.streamingCursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  margin-left: 1px;
+  background: @primary-500;
+  vertical-align: text-bottom;
+  animation: cursorBlink 0.8s step-end infinite;
+}
+
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
 // Inline error hint shown below the bubble.
 .errorText {
   font-size: 0.75rem;       // 12 px — smaller than body to feel like a caption

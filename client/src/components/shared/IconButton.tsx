@@ -56,7 +56,7 @@ export function IconButton({
   variant = 'ghost',
   // Allow callers to extend the button’s CSS class list.
   className = '',
-  ...props,
+  ...props
 }: IconButtonProps) {
   return (
     <button
@@ -67,7 +67,7 @@ export function IconButton({
       // Compose the base button style, the variant-specific style, and any
       // caller-supplied classes into a single className string.
       className={`${styles.button} ${styles[variant]} ${className}`}
-      {/* Forward all remaining standard button props */}
+      // Forward all remaining standard button props
       {...props}
     >
       {children}

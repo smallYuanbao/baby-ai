@@ -49,7 +49,7 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
-      {/* Compose class names: base style + variant + size + consumer overrides */}
+      // Compose class names: base style + variant + size + consumer overrides
       className={`${styles.button} ${styles[variant]} ${styles[size]} ${className}`}
       disabled={disabled}
       {...props}

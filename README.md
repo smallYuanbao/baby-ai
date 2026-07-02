@@ -26,7 +26,7 @@
 
 - 💬 **智能育儿问答**：科学的育儿知识回答，覆盖喂养、睡眠、发育、疾病护理等
 - 📚 **RAG 检索增强**：基于知识库的精准回答，附带引用来源和相关性分数
-- ⚡ **SSE 流式输出**：实时打字效果，快速响应
+- ⚡ **SSE 流式输出**：实时打字效果，Token 批处理 + React.memo + 流式期纯文本渲染，避免逐 token 重渲染和 Markdown 重复解析
 - 🔄 **多轮对话**：支持指代消解（自动识别"他/这个/那些"等代词）和意图路由
 - 🛡️ **降级策略**：检索不足时自动降级为通用回答
 - 📁 **文件上传**：支持 PDF、TXT、图片上传
@@ -417,6 +417,31 @@ baby-ai/
 | `status` | `{"stage":"..."}` | 管道阶段状态 |
 | `done` | `{"messageId":"...","totalTokens":0}` | 流式结束 |
 | `error` | `{"code":"...","message":"..."}` | 错误信息 |
+
+## 前端 SSE 渲染优化
+
+流式输出场景的核心挑战：每个 token 到达时如果直接 `setState` → 全量重渲染 → ReactMarkdown 完整解析，会导致 O(n²) 级别的计算开销（1000 token 的回复 ≈ 1000 次 Markdown 解析）。以下三项优化针对性地解决了这个问题：
+
+### 1. React.memo 避免已完成消息重渲染
+
+[MessageBubble](client/src/components/chat/MessageBubble.tsx) 使用 `React.memo` 包裹，浅比较 props。流式输出第 11 条消息时，前 10 条已完成的消息直接跳过重渲染。
+
+### 2. Token 批处理（50ms 窗口）
+
+[useChat](client/src/hooks/useChat.ts) 的 `onToken` 回调不再逐 token 调用 `setMessages`，而是将 token 积累到 ref 中，每 50ms 批量 flush 一次。对于每秒 30-50 token 的流，渲染频率从 ~40 次/秒降到 ~20 次/秒。
+
+### 3. 流式期间纯文本渲染
+
+[MessageBubble](client/src/components/chat/MessageBubble.tsx)、[GrowthAnalysis](client/src/components/growth/GrowthAnalysis.tsx)、[StoryTime](client/src/components/play/StoryTime.tsx) 在 SSE 流式输出过程中渲染为纯文本（含闪烁光标），仅在 `done` 事件后切换回 `ReactMarkdown`。这消除了流式期间所有无效的 remark → rehype 解析开销。
+
+```
+流式链路（优化后）：
+  SSE token → ref 积累（50ms timer）
+    → flush → setMessages 一次提交整批
+      → React.memo: 已完成消息 ✅ 跳过
+      → 流式消息: <p>纯文本+光标</p> ✅ 无 Markdown 解析
+      → done 后: <ReactMarkdown> ✅ 只解析一次
+```
 
 ## 待实现功能
 

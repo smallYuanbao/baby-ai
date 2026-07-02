@@ -113,6 +113,28 @@ export function useChat() {
   const [error, setError] = useState<string | null>(null);
   const sessionIdRef = useRef<string>(generateId());
 
+  // Token batching: accumulate tokens in a ref, flush on a 50 ms timer
+  // to reduce re-render frequency during fast streams.
+  const tokenBatchRef = useRef<string[]>([]);
+  const tokenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Stable reference to the current streaming message ID for the flush callback.
+  const streamingMsgIdRef = useRef<string>('');
+
+  /** Flush accumulated tokens to state, then clear the batch and timer. */
+  const flushTokenBatch = useCallback(() => {
+    const chunk = tokenBatchRef.current.join('');
+    tokenBatchRef.current = [];
+    tokenTimerRef.current = null;
+    if (chunk) {
+      const msgId = streamingMsgIdRef.current;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === msgId ? { ...m, content: m.content + chunk } : m,
+        ),
+      );
+    }
+  }, []);
+
   const { connectionState, connect, disconnect } = useSSE();
 
   /**
@@ -180,6 +202,8 @@ export function useChat() {
       };
 
       setMessages((prev) => [...prev, aiMessage]);
+      // Track the streaming message ID for token batching flush
+      streamingMsgIdRef.current = aiMessageId;
       // Guard active to prevent concurrent sends
       setIsStreaming(true);
 
@@ -202,17 +226,15 @@ export function useChat() {
       await connect(
         () => api.chatSSE(text.trim(), history, fileId),
         {
-          // --- Token streaming ---
-          // Append each received token fragment to the placeholder message.
-          // Uses functional setState to avoid stale closure over `messages`.
+          // --- Token streaming (batched) ---
+          // Tokens are accumulated in a ref and flushed every 50 ms to reduce
+          // re-render frequency. Each flush appends the entire batch as one
+          // string, so ReactMarkdown re-parses far fewer times.
           onToken: (tokenText: string) => {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === aiMessageId
-                  ? { ...m, content: m.content + tokenText }
-                  : m,
-              ),
-            );
+            tokenBatchRef.current.push(tokenText);
+            if (!tokenTimerRef.current) {
+              tokenTimerRef.current = setTimeout(flushTokenBatch, 50);
+            }
           },
 
           // --- Source references ---
@@ -231,9 +253,13 @@ export function useChat() {
           },
 
           // --- Stream completion ---
-          // Mark the assistant message as no longer streaming and release
-          // the guard so the next send can proceed.
+          // Flush any remaining batched tokens, then mark the message done.
           onDone: () => {
+            if (tokenTimerRef.current) {
+              clearTimeout(tokenTimerRef.current);
+              tokenTimerRef.current = null;
+            }
+            flushTokenBatch();
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === aiMessageId ? { ...m, isStreaming: false } : m,
@@ -243,9 +269,13 @@ export function useChat() {
           },
 
           // --- Stream error ---
-          // Surface the error text on both the global error state and the
-          // assistant message itself so the UI can show inline retry controls.
+          // Flush remaining tokens before surfacing the error.
           onError: (err: { code: string; message: string }) => {
+            if (tokenTimerRef.current) {
+              clearTimeout(tokenTimerRef.current);
+              tokenTimerRef.current = null;
+            }
+            flushTokenBatch();
             setError(err.message);
             setMessages((prev) =>
               prev.map((m) =>
@@ -259,7 +289,7 @@ export function useChat() {
         },
       );
     },
-    [messages, isStreaming, connect],
+    [messages, isStreaming, connect, flushTokenBatch],
   );
 
   /**
@@ -332,6 +362,12 @@ export function useChat() {
   const clearChat = useCallback(() => {
     // Tear down SSE first to prevent late-arriving events on empty state
     disconnect();
+    // Clear any pending token batch timer
+    if (tokenTimerRef.current) {
+      clearTimeout(tokenTimerRef.current);
+      tokenTimerRef.current = null;
+    }
+    tokenBatchRef.current = [];
     // Reset all React state to initial values
     setMessages([]);
     setError(null);
