@@ -22,6 +22,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { ChatRequestSchema } from '../types/chat.js';
 import { validateBody } from '../middleware/validateBody.js';
+import { authenticate } from '../middleware/authenticate.js';
 import { runRAGPipeline } from '../services/rag/pipeline.js';
 import { chat as deepseekChat, chatStream } from '../services/deepseek.js';
 import { routeIntent } from '../services/intentRouter.js';
@@ -70,7 +71,7 @@ export const chatRouter = Router();
  * @throws Will forward non-stream errors to Express error-handling middleware
  *         via `next(err)`.
  */
-chatRouter.post('/', validateBody(ChatRequestSchema), async (req, res, next) => {
+chatRouter.post('/', authenticate(), validateBody(ChatRequestSchema), async (req, res, next) => {
   // ---- 1. Extract request parameters ----
   // Destructure the validated body. `history` defaults to an empty array so
   // downstream code can safely call `.slice()` and iterate.

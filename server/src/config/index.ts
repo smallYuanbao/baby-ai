@@ -281,6 +281,45 @@ export const config = {
   },
 
   // --------------------------------------------------------------------------
+  // JWT 认证
+  // --------------------------------------------------------------------------
+
+  jwt: {
+    /**
+     * JWT 签名密钥（必需）。
+     *
+     * 用于签发和验证 access token 与 refresh token。
+     * 生产环境必须使用强随机字符串（至少 32 字符）。
+     *
+     * @default '' （无默认值，必须通过 .env / 环境变量提供）
+     * @env JWT_SECRET
+     */
+    secret: required('JWT_SECRET'),
+
+    /**
+     * Access Token 有效期。
+     *
+     * 短寿命设计（默认 15 分钟），减少 Token 泄露后的风险窗口。
+     * 支持格式：`15m`（分钟）、`1h`（小时）、`1d`（天）。
+     *
+     * @default '15m'
+     * @env JWT_ACCESS_EXPIRES_IN
+     */
+    accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
+
+    /**
+     * Refresh Token 有效期。
+     *
+     * 长寿命设计（默认 7 天），用于在 access token 过期后自动续期。
+     * 支持格式同 accessExpiresIn。
+     *
+     * @default '7d'
+     * @env JWT_REFRESH_EXPIRES_IN
+     */
+    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+  },
+
+  // --------------------------------------------------------------------------
   // 文件上传
   // --------------------------------------------------------------------------
 

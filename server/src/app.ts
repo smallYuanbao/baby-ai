@@ -67,6 +67,7 @@
 
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { chatRouter } from './routes/chat.js';
@@ -74,9 +75,11 @@ import { uploadRouter } from './routes/upload.js';
 import { healthRouter } from './routes/health.js';
 import { growthRouter } from './routes/growth.js';
 import { playRouter } from './routes/play.js';
+import { authRouter } from './routes/auth.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { config } from './config/index.js';
+import { runMigrations } from './db/index.js';
 
 /**
  * __dirname equivalent for ESM modules.
@@ -105,6 +108,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export function createApp() {
   const app = express();
 
+  // ---- Database migrations ------------------------------------------------
+  // Run idempotent schema migrations BEFORE any route registrations so that
+  // all tables exist when the first request arrives.
+  runMigrations();
+
   // ---- CORS ---------------------------------------------------------------
   // Allow-listed origins for local development:
   //   - localhost on any port (e.g. Vite dev server, React Native Expo)
@@ -123,6 +131,10 @@ export function createApp() {
   // reach route handlers or downstream services (LLM, vector DB, etc.).
   app.use(express.json({ limit: '1mb' }));
 
+  // ---- Cookie parsing -----------------------------------------------------
+  // Required by the auth module for reading/writing the refresh token cookie.
+  app.use(cookieParser());
+
   // ---- Request logging ----------------------------------------------------
   // Hooks into the response `finish` event so the log line includes the
   // final status code and elapsed wall-clock time.
@@ -136,11 +148,13 @@ export function createApp() {
 
   // ---- Route handlers -----------------------------------------------------
   // Each router encapsulates a vertical slice of the API surface:
+  //   /api/auth     — user registration, login, logout, token refresh
   //   /api/health   — liveness / readiness probes
   //   /api/upload   — file upload endpoint (backed by Multer)
   //   /api/chat     — LLM chat-completion with RAG-augmented parenting context
   //   /api/growth   — child growth curve queries
   //   /api/play     — parent-child activity / game suggestions
+  app.use('/api/auth', authRouter);
   app.use('/api/health', healthRouter);
   app.use('/api/upload', uploadRouter);
   app.use('/api/chat', chatRouter);

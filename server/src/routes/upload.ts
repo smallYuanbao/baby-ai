@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { upload } from '../middleware/upload.js';
+import { authenticate } from '../middleware/authenticate.js';
 import { fileParser } from '../services/fileParser.js';
 import type { UploadedFile } from '../types/upload.js';
 import logger from '../utils/logger.js';
@@ -60,7 +61,7 @@ export const uploadRouter = Router();
  *          - `path`         — 服务端磁盘上的文件全路径
  *          - `extractedText` — 提取出的文本内容；提取失败则为 `undefined`
  */
-uploadRouter.post('/', upload.single('file'), async (req, res, next) => {
+uploadRouter.post('/', authenticate(), upload.single('file'), async (req, res, next) => {
   try {
     // 校验：multer 未能解析到文件（请求未携带 file 字段，或字段为空）
     if (!req.file) {

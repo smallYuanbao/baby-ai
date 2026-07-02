@@ -49,6 +49,7 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { validateBody } from '../middleware/validateBody.js';
+import { authenticate } from '../middleware/authenticate.js';
 import {
   CreateChildSchema,
   UpdateChildSchema,
@@ -67,6 +68,11 @@ import logger from '../utils/logger.js';
 
 export const growthRouter = Router();
 
+// All growth routes require authentication.
+// Mount the authenticate middleware at the router level so every route below
+// automatically gets user isolation.
+growthRouter.use(authenticate());
+
 // ===== Child CRUD =====
 
 /**
@@ -80,10 +86,11 @@ export const growthRouter = Router();
  * @returns    200 with a JSON array of Child objects
  * @error       500 via next(err) on store failure
  */
-growthRouter.get('/children', async (_req, res, next) => {
+growthRouter.get('/children', async (req, res, next) => {
   try {
+    const userId = req.user!.userId;
     // Fetch all children from the persistence layer
-    const children = await store.listChildren();
+    const children = await store.listChildren(userId);
     res.json(children);
   } catch (err) {
     next(err);
@@ -103,8 +110,9 @@ growthRouter.get('/children', async (_req, res, next) => {
  */
 growthRouter.get('/children/:childId', async (req, res, next) => {
   try {
+    const userId = req.user!.userId;
     // Look up the child in the store by path parameter
-    const child = await store.getChild(req.params.childId);
+    const child = await store.getChild(userId, req.params.childId);
     if (!child) {
       // Not found — 404 with a human-readable error
       res.status(404).json({ error: '宝宝档案不存在', code: 'NOT_FOUND' });
@@ -130,8 +138,9 @@ growthRouter.get('/children/:childId', async (req, res, next) => {
  */
 growthRouter.post('/children', validateBody(CreateChildSchema), async (req, res, next) => {
   try {
+    const userId = req.user!.userId;
     // Body is already validated by middleware; create the child in the store
-    const child = await store.createChild(req.body);
+    const child = await store.createChild(userId, req.body);
     res.status(201).json(child);
   } catch (err) {
     next(err);
@@ -156,8 +165,9 @@ growthRouter.post('/children', validateBody(CreateChildSchema), async (req, res,
  */
 growthRouter.put('/children/:childId', validateBody(UpdateChildSchema), async (req, res, next) => {
   try {
+    const userId = req.user!.userId;
     // Apply the validated partial update to the matching child
-    const child = await store.updateChild(req.params.childId, req.body);
+    const child = await store.updateChild(userId, req.params.childId, req.body);
     if (!child) {
       res.status(404).json({ error: '宝宝档案不存在', code: 'NOT_FOUND' });
       return;
@@ -182,8 +192,9 @@ growthRouter.put('/children/:childId', validateBody(UpdateChildSchema), async (r
  */
 growthRouter.delete('/children/:childId', async (req, res, next) => {
   try {
+    const userId = req.user!.userId;
     // Attempt to delete; store returns false if the child didnʼt exist
-    const ok = await store.deleteChild(req.params.childId);
+    const ok = await store.deleteChild(userId, req.params.childId);
     if (!ok) {
       res.status(404).json({ error: '宝宝档案不存在', code: 'NOT_FOUND' });
       return;
@@ -217,8 +228,9 @@ growthRouter.post(
   validateBody(CreateGrowthRecordSchema),
   async (req, res, next) => {
     try {
+      const userId = req.user!.userId;
       // Add the record to the child identified by the URL path
-      const record = await store.addRecord(req.params.childId, req.body);
+      const record = await store.addRecord(userId, req.params.childId, req.body);
       if (!record) {
         // The child referenced by childId does not exist
         res.status(404).json({ error: '宝宝档案不存在', code: 'NOT_FOUND' });
@@ -251,8 +263,10 @@ growthRouter.put(
   validateBody(UpdateGrowthRecordSchema),
   async (req, res, next) => {
     try {
+      const userId = req.user!.userId;
       // Look up the child and mutate the matching record inside it
       const record = await store.updateRecord(
+        userId,
         req.params.childId,
         req.params.recordId,
         req.body,
@@ -282,8 +296,9 @@ growthRouter.put(
  */
 growthRouter.delete('/children/:childId/records/:recordId', async (req, res, next) => {
   try {
+    const userId = req.user!.userId;
     // Delete the record; returns false if child or record is missing
-    const ok = await store.deleteRecord(req.params.childId, req.params.recordId);
+    const ok = await store.deleteRecord(userId, req.params.childId, req.params.recordId);
     if (!ok) {
       res.status(404).json({ error: '记录不存在', code: 'NOT_FOUND' });
       return;
@@ -325,8 +340,9 @@ growthRouter.delete('/children/:childId/records/:recordId', async (req, res, nex
  */
 growthRouter.get('/children/:childId/chart-data', async (req, res, next) => {
   try {
+    const userId = req.user!.userId;
     // Verify the child exists before computing chart data
-    const child = await store.getChild(req.params.childId);
+    const child = await store.getChild(userId, req.params.childId);
     if (!child) {
       res.status(404).json({ error: '宝宝档案不存在', code: 'NOT_FOUND' });
       return;
@@ -425,11 +441,12 @@ const ANALYSIS_PROMPT = `你是一位资深的儿科医生和儿童发育专家�
  * @error     500 (`INTERNAL_ERROR`) when the store fetch fails
  */
 growthRouter.post('/children/:childId/analysis', async (req, res) => {
+  const userId = req.user!.userId;
   const childId = req.params.childId;
 
   try {
     // Step 1: Fetch the child profile
-    const child = await store.getChild(childId);
+    const child = await store.getChild(userId, childId);
     if (!child) {
       res.status(404).json({ error: '宝宝档案不存在', code: 'NOT_FOUND' });
       return;

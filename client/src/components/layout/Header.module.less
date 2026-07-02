@@ -38,13 +38,14 @@
 // ------------------------------------------------------------------
 //  Inner container
 // ------------------------------------------------------------------
-//  Flex row that holds the avatar and the text block side by side.
-//  `gap` replaces the need for explicit margin-right on the avatar.
+//  Flex row that holds the avatar, the text block, and the user section.
+//  Uses `justify-content: space-between` so the user section is pushed right.
 // ------------------------------------------------------------------
 .container {
   display: flex;
   align-items: center;
   gap: @space-3;  // 12px — comfortable separation between avatar and text
+  justify-content: space-between;
 }
 
 // ------------------------------------------------------------------
@@ -95,4 +96,47 @@
 .subtitle {
   font-size: @text-xs;       // 12px — intentionally small so it doesn't compete with the title
   color: @gray-400;          // muted gray for secondary hierarchy
+}
+
+// ------------------------------------------------------------------
+//  Brand wrapper — groups avatar + title + subtitle as a unit
+// ------------------------------------------------------------------
+.brand {
+  display: flex;
+  flex-direction: column;
+}
+
+// ------------------------------------------------------------------
+//  User section — right-aligned user info + logout
+// ------------------------------------------------------------------
+.userSection {
+  display: flex;
+  align-items: center;
+  gap: @space-3;
+  margin-left: auto;
+}
+
+.userName {
+  font-size: @text-sm;
+  color: @gray-600;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logoutBtn {
+  padding: 4px 12px;
+  border: 1px solid @gray-200;
+  border-radius: @radius-xl;
+  background: @white;
+  color: @gray-500;
+  font-size: @text-xs;
+  cursor: pointer;
+  transition: color @transition-fast, border-color @transition-fast;
+
+  &:hover {
+    color: @red-500;
+    border-color: @red-300;
+  }
 }

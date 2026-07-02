@@ -1,25 +1,26 @@
 /**
  * Header — App shell top bar.
  *
- * Renders the global site header with the app logo (a teddy-bear SVG mascot),
- * app title, and a subtitle. It is a pure presentational component with no
- * local state, side effects, or props — the content is static branding.
+ * Renders the global site header with the app logo, title, and the current
+ * user's info + logout button when authenticated.
  *
  * Layout role: sits at the top of the main app layout, above the sidebar /
- * content area. It uses `flex-shrink: 0` so it never collapses when the
+ * content area. Uses `flex-shrink: 0` so it never collapses when the
  * viewport is short.
  */
 
+import { useAuth } from '../../contexts/AuthContext';
 import styles from './Header.module.less';
 
 /**
- * App header — branding bar with logo and copy.
+ * App header — branding bar with user menu.
  *
- * This component has no props (it renders static content), so there is no
- * props interface to document. If the title or subtitle are made configurable
- * in the future, they should be added as props on a new `HeaderProps` type.
+ * When the user is authenticated, displays their nickname (or email fallback)
+ * and a logout button in the top-right corner.
  */
 export function Header() {
+  const { user, logout } = useAuth();
+
   return (
     <header className={styles.header}>
       <div className={styles.container}>
@@ -46,10 +47,22 @@ export function Header() {
             <path d="M40 70 Q50 78 60 70" stroke="#f97316" strokeWidth="2.5" fill="none" strokeLinecap="round" />
           </svg>
         </div>
-        <div>
+        <div className={styles.brand}>
           <h1 className={styles.title}>育儿AI助手</h1>
           <p className={styles.subtitle}>用科学知识陪伴宝宝成长 🧸</p>
         </div>
+
+        {/* User section — right-aligned */}
+        {user && (
+          <div className={styles.userSection}>
+            <span className={styles.userName}>
+              {user.nickname || user.email}
+            </span>
+            <button className={styles.logoutBtn} onClick={logout} title="退出登录">
+              退出
+            </button>
+          </div>
+        )}
       </div>
     </header>
   );

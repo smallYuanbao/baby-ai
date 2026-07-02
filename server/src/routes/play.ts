@@ -17,12 +17,16 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { validateBody } from '../middleware/validateBody.js';
+import { authenticate } from '../middleware/authenticate.js';
 import { chat, chatStream } from '../services/deepseek.js';
 import { initSSE, sendToken, sendDone, sendError } from '../utils/sse.js';
 import { STORY_PROMPT, RIDDLE_PROMPT, BABY_TALK_PROMPT } from '../services/playPrompts.js';
 import logger from '../utils/logger.js';
 
 export const playRouter = Router();
+
+// All play routes require authentication.
+playRouter.use(authenticate());
 
 /* ---- Zod Schemas ---- */
 

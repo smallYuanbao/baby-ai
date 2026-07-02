@@ -88,3 +88,34 @@
    * events, or be read by screen readers. */
   display: none;
 }
+
+/* ---------------------------------------------------------------------------
+ * Loading state
+ * --------------------------------------------------------------------------- */
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 50%, #fcd34d 100%);
+  color: @gray-600;
+  font-size: @text-sm;
+  gap: @space-3;
+}
+
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid @primary-100;
+  border-top-color: @primary-500;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

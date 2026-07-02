@@ -1,5 +1,6 @@
 import multer from 'multer';
 import path from 'path';
+import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config/index.js';
 
@@ -73,7 +74,22 @@ import { config } from '../config/index.js';
  *    and naming conflicts.
  */
 const storage = multer.diskStorage({
-  destination: config.upload.dir,
+  /**
+   * Dynamic destination: resolves to a user-specific subdirectory when
+   * `req.user` is available (i.e. after the `authenticate` middleware).
+   *
+   * Falls back to the configured upload directory for unauthenticated requests
+   * or when the upload middleware is used without the authenticate guard.
+   */
+  destination: (req: any, _file, cb) => {
+    const userId: string | undefined = req.user?.userId;
+    const dir = userId
+      ? path.join(config.upload.dir, userId)
+      : config.upload.dir;
+    // Ensure the directory exists; multer does not create it automatically.
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
 
   /**
    * @param _req  - Express request object (unused; the original filename is
