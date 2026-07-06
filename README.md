@@ -1,6 +1,6 @@
 # 🐻 育儿AI助手 - Baby AI
 
-基于 RAG + ReAct 架构的育儿知识 AI 聊天应用，具备意图路由、多轮记忆和降级策略，用科学知识和温暖陪伴帮助父母解答育儿问题。
+基于 RAG + 意图路由的育儿知识 AI 聊天应用，具备多轮记忆和降级策略，用科学知识和温暖陪伴帮助父母解答育儿问题。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/node-%E2%89%A520-green.svg)](https://nodejs.org/)
