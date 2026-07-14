@@ -1,20 +1,8 @@
-import json
-import os
-from typing import Generator
 from openai import OpenAI
 
-from app.services.rag import search_docs
-from app.services.prompt import buildPrompt
-
-
-
-# 获取DeepSeek相关环境变量
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
-DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
-DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+from app.core.config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
 
 # 初始化 DeepSeek 客户端
-
 deepseek_client = OpenAI(
     api_key=DEEPSEEK_API_KEY,
     base_url=DEEPSEEK_BASE_URL,

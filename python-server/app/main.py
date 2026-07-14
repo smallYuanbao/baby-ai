@@ -1,14 +1,9 @@
 from fastapi import FastAPI
 from datetime import datetime as Datetime
 from datetime import timezone
-from dotenv import load_dotenv
-
-
-# 加载.env文件中的环境变量
-load_dotenv()
 
 from fastapi.responses import StreamingResponse
-from app.models.chat import ChatRequest, ChatRequestStream, ChatResponse
+from app.models.chat import ChatRequest, ChatResponse
 from app.services.chat_service import execute_rag_pipeline, execute_rag_stream
 
 
@@ -28,10 +23,10 @@ async def health_check():
 
 # 非流式输出
 @app.post("/api/chat")
-async def chat(request: ChatRequest) -> ChatResponse:
-    result = execute_rag_pipeline(request.message)
+def chat(request: ChatRequest) -> ChatResponse:
+    result = execute_rag_pipeline(request.message, request.history)
     return ChatResponse(answer=result["answer"], references=result["references"])
 
 @app.post("/api/chat/stream")
-async def chat_stream(request: ChatRequestStream):
-    return StreamingResponse(execute_rag_stream(request.message), media_type="text/event-stream")
+def chat_stream(request: ChatRequest):
+    return StreamingResponse(execute_rag_stream(request.message, request.history), media_type="text/event-stream")
