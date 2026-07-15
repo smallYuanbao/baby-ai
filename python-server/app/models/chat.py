@@ -10,6 +10,7 @@ class ChatHistoryEntry(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     history: Optional[list[ChatHistoryEntry]] = None
+    session_id: str
 
 class ChatResponse(BaseModel):
     answer: str

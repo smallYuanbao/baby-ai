@@ -24,9 +24,9 @@ async def health_check():
 # 非流式输出
 @app.post("/api/chat")
 def chat(request: ChatRequest) -> ChatResponse:
-    result = execute_rag_pipeline(request.message, request.history)
+    result = execute_rag_pipeline(request.message, request.session_id, request.history)
     return ChatResponse(answer=result["answer"], references=result["references"])
 
 @app.post("/api/chat/stream")
 def chat_stream(request: ChatRequest):
-    return StreamingResponse(execute_rag_stream(request.message, request.history), media_type="text/event-stream")
+    return StreamingResponse(execute_rag_stream(request.message, request.session_id, request.history), media_type="text/event-stream")

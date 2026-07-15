@@ -8,6 +8,7 @@ from app.services.prompt import buildPrompt
 from app.services.llm import call_deepseek, generate_stream
 from app.services.query_rewrite import rewrite_query
 from app.services.intent_router import IntentResult, route_intent
+from app.services.session_manager import add_assitant_message, add_user_message, get_history
 
 def _build_messages(user_message: str, context_docs: list[str], histroy: Optional[list[ChatHistoryEntry]], intent_result: IntentResult ) -> list[ChatMessage]:
     messages = []
@@ -26,19 +27,27 @@ def _build_messages(user_message: str, context_docs: list[str], histroy: Optiona
     return messages
 
 
-def get_rag_context(user_message: str, histroy: Optional[list[ChatHistoryEntry]]) -> tuple[list[ChatMessage], list[str]]:
+def get_rag_context(user_message: str, session_id: str, client_history: list[ChatHistoryEntry]) -> tuple[list[ChatMessage], list[str]]:
     """检索 + 构建 Prompt，返回 (prompt, context_docs)"""
-    # 1. 改写
-    rewrite_result = rewrite_query(user_message, histroy)
+
+    # 1. 取服务端历史（如果客户端没传，用服务端的）
+    server_history = get_history(session_id)
+    history = client_history if client_history else server_history
+
+    print("--- server_history ---", server_history)
+    print("--- client_history ---", client_history)
+
+    # 2. 改写
+    rewrite_result = rewrite_query(user_message, history)
     message = rewrite_result.wasRewritten and  rewrite_result.rewrittenQuery or user_message
     print("--- rewrite_result ---", rewrite_result)
 
-    # 2. 意图路由
+    # 3. 意图路由
     intent_result = route_intent(message)
 
     print(f"[意图路由] 类别: {intent_result.intent}")
 
-    # 3. RAG 检索（后）— emergency 跳过
+    # 4. RAG 检索（后）— emergency 跳过
     if intent_result.intent == "emergency":
         context_docs = []
     else:
@@ -48,21 +57,30 @@ def get_rag_context(user_message: str, histroy: Optional[list[ChatHistoryEntry]]
         results = hybrid_search_rrf(message, top_k=5)
         context_docs = [r["doc"] for r in results]
 
-    # 4. 拼messages
-    messages= _build_messages(message, context_docs, histroy, intent_result)
+    # 5. 拼messages
+    messages= _build_messages(message, context_docs, history, intent_result)
     return messages, context_docs
 
 
 
-def execute_rag_pipeline(user_message: str, histroy: Optional[list[ChatHistoryEntry]]) -> dict:
+def execute_rag_pipeline(user_message: str, session_id: str, client_history: list[ChatHistoryEntry]) -> dict:
     """非流式 RAG 管道"""
-    messages, context_docs = get_rag_context(user_message, histroy)
+    messages, context_docs = get_rag_context(user_message, session_id, client_history)
     answer = call_deepseek(messages)
+
+    # 更新服务端历史
+    add_user_message(session_id, user_message)
+    add_assitant_message(session_id, answer)
+
     return {"answer": answer, "references": context_docs}
 
-def execute_rag_stream(user_message: str, histroy: Optional[list[ChatHistoryEntry]]):
+def execute_rag_stream(user_message: str, session_id: str, client_history: list[ChatHistoryEntry]):
     """流式 RAG 管道（生成器）"""
-    messages, context_docs = get_rag_context(user_message, histroy)
+    messages, context_docs = get_rag_context(user_message, session_id, client_history)
     yield f"event: references\ndata: {json.dumps(context_docs, ensure_ascii=False)}\n\n"
     yield from generate_stream(messages)
     yield f"event: done\ndata: {{}}\n\n"
+
+    # 更新服务端历史
+    add_user_message(session_id, user_message)
+    # 注意：流式模式下 assistant 消息需要前端回传或从 yield 中收集

@@ -1,7 +1,7 @@
 import re
 from typing import Optional
 
-from app.models.chat import RewriteResult, ChatHistoryEntry
+from app.models.chat import ChatMessage, RewriteResult, ChatHistoryEntry
 from app.core.config import QUERY_REWRITE_ENABLED
 from app.services.llm import call_deepseek
 
@@ -42,7 +42,8 @@ def rewrite_query(message: str, histroy: list[ChatHistoryEntry]) -> RewriteResul
     请直接输出改写后的查询语句（一行，不要加任何解释）："""
 
     try:
-        content = call_deepseek(rewritePrompt)
+        messages = [ChatMessage(role="user", content=rewritePrompt)]
+        content = call_deepseek(messages)
         rewritten = content.strip() # 移除字符串两端空格
         print("---origin message --", rewritePrompt)
         print("--rewrite message --", rewritten)
@@ -52,6 +53,7 @@ def rewrite_query(message: str, histroy: list[ChatHistoryEntry]) -> RewriteResul
             wasRewritten = True,
         )
     except Exception as e:
+        print(f"查询改写失败: {type(e).__name__}: {e}")
         return RewriteResult(
             originalQuery =  message,
             rewrittenQuery = message,
