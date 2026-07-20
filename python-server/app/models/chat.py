@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 
 class ChatHistoryEntry(BaseModel):
@@ -12,9 +12,13 @@ class ChatRequest(BaseModel):
     history: Optional[list[ChatHistoryEntry]] = None
     session_id: str
 
+class Reference(BaseModel):
+    id: str     # 文档在 ChromaDB 中的唯一 ID（如 med_fbacde39）
+    text: str   # 文档内容（截断展示）
+
 class ChatResponse(BaseModel):
     answer: str
-    references: list[str] = []
+    references: list[Reference] = []
 
 
 class ChatOptions(BaseModel):
@@ -51,3 +55,9 @@ class RewriteResult(BaseModel):
     # 是否改写成功
     wasRewritten: bool
 
+class RAGDocument(BaseModel):
+    id: str = ""                              # 默认空，hybrid_search_rrf 等无 ChromaDB id 的场景
+    text: str
+    metadata: Optional[dict[str, Any]] = None # 默认 None，hybrid_search_rrf 等无元数据的场景
+    distance: Optional[float] = None
+    score: Optional[float] = None

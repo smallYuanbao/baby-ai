@@ -329,23 +329,30 @@ def classify_by_keyword(question: str) -> Optional[IntentResult]:
 
 
 def classify_by_llm(question: str) -> Intent:
-    # 1. 构建单条 user 消息（分类不需要 system prompt 和历史）
-    prompt_text = LLM_CLASSIFY_PROMPT.replace("{question}", question)
+    try:
+        # 1. 构建单条 user 消息（分类不需要 system prompt 和历史）
+        prompt_text = LLM_CLASSIFY_PROMPT.replace("{question}", question)
 
-    # 2. 调用 DeepSeek（temperature=0 保证确定性，maxTokens=10 只要一个词）
-    messages = [ChatMessage(role="user", content=prompt_text)]
-    options = ChatOptions(temperature=0, maxTokens=10)
-    content = call_deepseek(messages, options)
+        # 2. 调用 DeepSeek（temperature=0 保证确定性，maxTokens=10 只要一个词）
+        messages = [ChatMessage(role="user", content=prompt_text)]
+        options = ChatOptions(temperature=0, maxTokens=10)
+        content = call_deepseek(messages, options)
 
-    # 3. 从返回内容中提取第一个匹配的有效意图标签
-    #    即使 LLM 多输出了解释文字，也能正确解析
-    trimmed = content.strip().lower()
-    for intent in VALID_INTENTS:
-        if intent in trimmed:
-            return intent  # type: ignore  # Literal 匹配
-        
-    # 4. 兜底：解析不到任何有效意图 → general
-    return "general"
+        # 3. 从返回内容中提取第一个匹配的有效意图标签
+        #    即使 LLM 多输出了解释文字，也能正确解析
+        trimmed = content.strip().lower()
+        for intent in VALID_INTENTS:
+            if intent in trimmed:
+                return intent  # type: ignore  # Literal 匹配
+            
+        # 4. 兜底：解析不到任何有效意图 → general
+        return "general"
+    except Exception as e:
+        # 静默降级：LLM 不可用时（网络故障、API 限流、超时），
+        # 返回 'general' 保证对话流程不中断
+        # 不记录 error 级别日志，由调用方 routeIntent 统一记录
+        print(f"意图路由 [静默降级]: → LLM 不可用")
+        return "general"
 
 def route_intent(question: str) -> IntentResult:
     """
@@ -416,6 +423,8 @@ def route_intent(question: str) -> IntentResult:
     """
     # Step 1: 关键词匹配（本地，<1ms）
     keyword_result = classify_by_keyword(question)
+
+    print("--- keyword_result ----", keyword_result)
 
     # 高置信度直接采纳 — 最快路径，零 LLM 成本
     if keyword_result and keyword_result.confidence >= 0.9:

@@ -5,3 +5,8 @@ openai
 python-dotenv
 jieba
 rank-bm25
+pymupdf
+python-multipart
+datasets
+ragas
+langchain_openai

@@ -33,9 +33,14 @@ def add_user_message(session_id: str, content: str) -> None:
     """追加用户消息"""
     add_message(session_id, "user", content)
 
+    print(f"--- 存入成功 --- session={session_id}, 当前消息数={len(_sessions[session_id])}")
+
 
 def add_assitant_message(session_id: str, content: str) -> None:
     """追加 AI 回答"""
     add_message(session_id, "assistant",content)
+
+    print(f"--- 存入成功 --- session={session_id}, 当前消息数={len(_sessions[session_id])}")
+
 
 
