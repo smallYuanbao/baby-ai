@@ -107,20 +107,6 @@ def agent_chat(user_message: str) -> str:
     return response.choices[0].message.content
 
 
-# 用户消息 → 拼入ReAct格式的System Prompt
-#     ↓
-# while 循环次数 < 最大限制（如5次）:
-#     调LLM，让它按 Thought/Action/Observation 格式输出
-#     ↓
-#     如果LLM输出包含 "Final Answer":
-#         提取最终回答，结束循环
-#     ↓
-#     如果LLM输出包含 "Action":
-#         解析工具名和参数 → 执行工具 → 把结果作为 Observation 追加到消息
-#     ↓
-#     如果LLM输出不包含以上两种:
-#         可能是格式错误，重试或退出
-
 SYSTEM_PROMPT = """你是一个严谨的数据查询与任务执行助手。
 
 工作原则：
@@ -133,6 +119,8 @@ SYSTEM_PROMPT = """你是一个严谨的数据查询与任务执行助手。
 - 需要回答用户时，直接输出自然语言文本，不需要添加任何额外前缀（如“Final Answer:”）。"""
 
 MAX_STEPS = 5
+
+# ReAct 模式
 
 def react_agent_chat(user_message: str):
     messages = []
@@ -223,3 +211,60 @@ def react_agent_chat(user_message: str):
     # 超过最大步数，强制退出
     return "抱歉，任务步骤过多，暂时无法完成。请简化您的问题。"
 
+REFLECTION_PROMPT = """你是一个严格的儿科医学审查专家。你的任务是审查以下AI助手的回答，找出任何可能误导家长的医学错误、遗漏或不严谨之处。
+
+## 审查规则
+1. 如果回答完全正确且无遗漏，请输出"审核通过"。
+2. 如果存在以下任何问题，必须明确指出并修正：
+   - 医学事实错误（如体温阈值、用药剂量、月龄限制）
+   - 关键信息遗漏（如只说了“吃药”但没说明具体剂量和间隔）
+   - 表述不严谨（如“多喝水”但未说明具体量或频率）
+   - 缺乏安全警示（如未提醒某些情况下必须就医）
+
+## 用户问题
+{user_message}
+
+## AI 助手的回答
+{initial_answer}
+
+## 审查结果
+请按以下格式输出：
+❌ 发现的问题：
+（逐条列出，如果没有问题则输出“无”）
+
+🔧 修正后的完整回答：
+（如果审核通过，则输出原回答；否则输出修正后的完整回答）"""
+
+def reflect_and_correct(user_message: str, initial_answer: str) -> str:
+    """让LLM反思自己的回答，指出问题并修正"""
+    prompt = REFLECTION_PROMPT.format(
+        user_message=user_message,
+        initial_answer=initial_answer
+    )
+
+    response = deepseek_client.chat.completions.create(
+        model="deepseek-chat",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0,  # 审查必须稳定
+        max_tokens=1000
+    )
+
+    review = response.choices[0].message.content
+
+    print("------ review ------")
+
+    print(review)
+
+    if "审核通过" in review:
+        return initial_answer
+    else:
+        return review  # 包含修正后的完整回答
+
+def react_agent_with_reflection(user_message: str) -> str:
+    """ReAct Agent + Self-Reflection"""
+    # 1. 先用 ReAct 拿到初步回答
+    initial_answer = react_agent_chat(user_message)
+
+    # 2. 再反思修正
+    final_answer = reflect_and_correct(user_message, initial_answer)
+    return final_answer

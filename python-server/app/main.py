@@ -5,7 +5,7 @@ from datetime import timezone
 from fastapi.responses import StreamingResponse
 from app.models.chat import ChatRequest, ChatResponse
 from app.services.chat_service import execute_rag_pipeline, execute_rag_stream
-from app.services.agent import agent_chat, react_agent_chat
+from app.services.agent import agent_chat, react_agent_chat, react_agent_with_reflection
 
 
 app = FastAPI()
@@ -42,5 +42,12 @@ def agent_chat_endpoint(request: ChatRequest):
 @app.post("/api/agent/react")
 def agent_call(request: ChatRequest):
     answer = react_agent_chat(request.message)
+    return {"answer": answer}
+
+
+@app.post("/api/agent/reflect")
+
+def reflect_chat(request: ChatRequest):
+    answer = react_agent_with_reflection(request.message)
     return {"answer": answer}
 
