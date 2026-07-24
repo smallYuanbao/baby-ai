@@ -16,11 +16,13 @@
 | 层级 | 技术 |
 |---|---|
 | 前端 | React 18 + TypeScript + Vite + Less（\*.module.less） |
-| 后端 | Express.js + TypeScript |
+| 后端 (Node) | Express.js + TypeScript |
+| 后端 (Python) | FastAPI + Python 3.12 |
 | AI | DeepSeek API（流式 SSE） |
+| Agent | ReAct 循环 + MCP 工具调用 |
 | 嵌入 | Ollama + bge-m3 |
 | 向量库 | ChromaDB |
-| RAG管道 | 查询改写 → 向量检索 → 重排序 → 生成 |
+| RAG管道 | 查询改写 → 意图路由 → 混合检索(Dense+Sparse) → 重排序 → 生成 |
 
 ## 功能特性
 
@@ -31,6 +33,54 @@
 - 🛡️ **降级策略**：检索不足时自动降级为通用回答
 - 📁 **文件上传**：支持 PDF、TXT、图片上传
 - 🎨 **儿童友好UI**：暖橙配色、大圆角、可爱小熊形象
+
+## 🐍 Python 后端（推荐）
+
+Python 版是 Express 版的完整重构，增加了意图路由、混合检索(RRF + 线性加权)、精排降级、Agent 工具调用、MCP 协议支持，并提供评估和基准测试工具链。
+
+### 快速开始
+
+```bash
+cd python-server
+source .venv/bin/activate
+uvicorn app.main:app --reload --port 8000
+```
+
+详见 [python-server/README.md](python-server/README.md)
+
+### 新增功能（vs Express 版）
+
+| 功能 | 说明 |
+|------|------|
+| 🧭 意图路由 | keyword + LLM 双层分诊，7 类意图自动识别 |
+| 🔀 混合检索 | RRF 排名融合 + 线性加权，Dense(语义) + Sparse(关键词) |
+| 🎯 精排降级 | BGE Reranker → DeepSeek → 距离兜底，三级容错 |
+| 🤖 Agent | ReAct 决策循环 + function calling 工具调用 |
+| 🔌 MCP | Model Context Protocol 客户端，连接远程工具服务 |
+| 📊 评估工具 | LLM-as-Judge 打分 + faithfulness/relevancy/recall 三维度 |
+| ⚡ 基准测试 | ANN vs 暴力搜索对比、维度对比实验 |
+| 📁 文件上传 | PDF/TXT 解析 → 语义分块 → 向量化入库 |
+
+### Agent 端点
+
+| 端点 | 说明 |
+|------|------|
+| `POST /api/agent/chat` | 单次工具调用 |
+| `POST /api/agent/react` | ReAct 多轮循环 |
+| `POST /api/agent/reflect` | ReAct + 反思审查 |
+| `POST /api/agent/mcp` | MCP 协议工具调用 |
+
+### 🔌 MCP Server（工具调用示例）
+
+```bash
+cd mcp-server
+source venv/bin/activate
+python weather_server.py
+```
+
+MCP 客户端启动时自动发现 `get_weather` 工具（真实 wttr.in API），LLM 按需调用。
+
+---
 
 ## 快速开始
 
@@ -402,8 +452,13 @@ baby-ai/
 │       ├── middleware/     # Express 中间件
 │       ├── types/         # TypeScript 类型
 │       └── utils/         # 工具函数
-├── reranker/              # BGE 重排序服务
-├── knowledge_base/        # 知识库文档（用户自行导入，仓库不含原始数据，仅含灌库脚本）
+├── python-server/         # Python 后端服务（FastAPI）
+│   ├── app/
+│   │   └── services/      # RAG、Agent、Rerank、意图路由、文件上传等
+│   └── scripts/           # 评估、灌库、基准测试脚本
+├── reranker/              # BGE 重排序服务（独立部署）
+├── mcp-server/            # MCP 天气服务（Agent 工具调用示例）
+├── knowledge_base/        # 知识库文档
 ├── docker-compose.yml     # ChromaDB + Ollama
 └── .env.example           # 环境变量模板
 ```

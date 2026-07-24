@@ -10,3 +10,5 @@ python-multipart
 datasets
 ragas
 langchain_openai
+langchain-ollama
+mcp
