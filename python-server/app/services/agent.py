@@ -36,7 +36,7 @@ def agent_chat(user_message: str) -> str:
 
     # 第一次调 LLM：让它决定是否需要调工具
     response = deepseek_client.chat.completions.create(
-        model="deepseek-chat",
+        model="deepseek-v4-flash",
         messages=messages,
         tools=AVAILABLE_TOOLS,
         temperature=0.7,
@@ -106,7 +106,7 @@ def agent_chat(user_message: str) -> str:
 
         # 第二次调 LLM：结合工具结果生成最终回答
         final_response = deepseek_client.chat.completions.create(
-            model="deepseek-chat",
+            model="deepseek-v4-flash",
             messages=messages,
             temperature=0.7,
             max_tokens=1000
@@ -145,7 +145,7 @@ def react_agent_chat(user_message: str):
     for step in range(MAX_STEPS):
 
         response = deepseek_client.chat.completions.create(
-            model="deepseek-chat",
+            model="deepseek-v4-flash",
             messages=messages,
             tools=AVAILABLE_TOOLS,
             temperature=0.7,
@@ -255,7 +255,7 @@ def reflect_and_correct(user_message: str, initial_answer: str) -> str:
     )
 
     response = deepseek_client.chat.completions.create(
-        model="deepseek-chat",
+        model="deepseek-v4-flash",
         messages=[{"role": "user", "content": prompt}],
         temperature=0,  # 审查必须稳定
         max_tokens=2000
@@ -452,7 +452,7 @@ async def agent_chat_mcp(user_message: str, mcp_client: MCPClient) -> str:
     from datetime import date
     today_str = date.today().isoformat()  # → "2026-07-24"
     response = deepseek_client.chat.completions.create(
-        model="deepseek-chat",
+        model="deepseek-v4-flash",
         messages=[
             {"role": "system", "content": f"今天是 {today_str}。"},
             {"role": "user", "content": user_message},
@@ -479,7 +479,7 @@ async def agent_chat_mcp(user_message: str, mcp_client: MCPClient) -> str:
         print(result)
         # 4. 把结果还给 LLM 生成最终回答
         final_response = deepseek_client.chat.completions.create(
-            model="deepseek-chat",
+            model="deepseek-v4-flash",
             messages=[
                 {"role": "user", "content": user_message},
                 {"role": "assistant", "content": None, "tool_calls": [tool_call]},

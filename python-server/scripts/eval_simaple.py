@@ -31,7 +31,7 @@ def call_deepseek(prompt: str, max_tokens: int = 20) -> str:
         "Content-Type": "application/json"
     }
     payload = {
-        "model": "deepseek-chat",
+        "model": "deepseek-v4-flash",
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0,
         "max_tokens": max_tokens

@@ -90,7 +90,7 @@ def read_eval_results():
     # 用 DeepSeek 做评估的 LLM
     # 2. 初始化 DeepSeek LLM (推荐使用兼容 OpenAI 格式的 ChatOpenAI 实例化)
     evaluator_llm = ChatOpenAI(
-        model="deepseek-chat", # 使用 deepseek-chat 节点
+        model="deepseek-v4-flash", # 使用 deepseek-v4-flash 节点
         openai_api_key=DEEPSEEK_API_KEY,
         openai_api_base=DEEPSEEK_BASE_URL,
         temperature=0.0,       # 评估需要高度一致性，温度设为 0
