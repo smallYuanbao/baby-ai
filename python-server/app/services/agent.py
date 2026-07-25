@@ -1,11 +1,18 @@
 from contextlib import AsyncExitStack
 import json
+from typing import Optional
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from app.services.llm import deepseek_client
+from app.services.llm import call_deepseek, deepseek_client
 from app.services.tools import get_weather, WEATHER_TOOL
-from app.models.chat import ChatMessage
+from app.models.chat import ChatHistoryEntry, ChatMessage, Reference
+from app.services.rag import hybrid_search
+from app.services.rerank import rerank
+from app.services.chat_service import _build_messages
+from app.services.intent_router import IntentResult, route_intent
+from app.services.query_rewrite import rewrite_query
+from app.services.session_manager import get_history
 
 
 
@@ -251,7 +258,7 @@ def reflect_and_correct(user_message: str, initial_answer: str) -> str:
         model="deepseek-chat",
         messages=[{"role": "user", "content": prompt}],
         temperature=0,  # 审查必须稳定
-        max_tokens=1000
+        max_tokens=2000
     )
 
     review = response.choices[0].message.content
@@ -482,3 +489,104 @@ async def agent_chat_mcp(user_message: str, mcp_client: MCPClient) -> str:
         )
         return final_response.choices[0].message.content
     return response.choices[0].message.content
+
+
+# ============================================================
+# 多 Agent 协作流水线
+# ============================================================
+
+
+def retrieval_agent(
+    user_message: str,
+    session_id: str,
+    client_history: list[ChatHistoryEntry],
+) -> tuple[list[ChatMessage], list[Reference]]:
+    """
+    检索 + 构建 Prompt。
+    
+    Returns:
+        messages:    拼好的完整 messages 数组（可直接传给 LLM）
+        context_docs: 只含文本的文档列表（给 buildPrompt 用，保持向后兼容）
+        references:   带 id + text 的结构化引用列表（返回给前端展示）
+
+    这个 Agent 只做一件事——拿到用户问题，调混合检索，返回文档列表。
+    它不需要知道后续如何处理这些文档。
+    """
+
+    # 1. 取服务端历史（如果客户端没传，用服务端的）
+    server_history = get_history(session_id)
+    history = client_history if client_history else server_history
+
+    # 2. 改写
+    rewrite_result = rewrite_query(user_message, history)
+    message = rewrite_result.wasRewritten and rewrite_result.rewrittenQuery or user_message
+
+    # 3. 意图路由
+    intent_result = route_intent(message)
+    print(f"[意图路由] 类别: {intent_result.intent}")
+
+    # 4. RAG 检索（后）— emergency 跳过
+    if intent_result.intent == "emergency":
+        context_docs = []
+        references = []
+    else:
+        results = hybrid_search(message, alpha=0.7, top_k=10)
+
+        # RRF 混合检索 → 多召回一些候选
+        # results = hybrid_search_rrf(message, top_k=10)
+
+        # 精排：BGE → DeepSeek → 原始距离排序
+        ranked_result = rerank(message, results, top_k=5)
+
+        # 文本列表（给 buildPrompt 拼 prompt 用）
+        context_docs = [d["text"] for d in ranked_result["rankedDocuments"]]
+
+        # 结构化引用（给前端展示，包含 id + text）
+        references = [
+            Reference(id=d["id"] or "", text=d["text"])
+            for d in ranked_result["rankedDocuments"]
+        ]
+    
+    messages = _build_messages(message, context_docs, history, intent_result)
+
+    return messages, references
+
+
+def generation_agent(messages: list[ChatMessage]) -> str:
+    """
+    回答 Agent：负责基于检索结果生成回答。
+    
+    这个 Agent 只做一件事——拿到用户问题和检索文档，拼 Prompt，调 LLM 生成回答。
+    它不需要知道文档是怎么来的，也不需要检查回答是否正确。
+    """
+
+    answer = call_deepseek(messages)
+    
+    return answer
+
+
+def review_agent(query: str, answer: str) -> str:
+    """
+    审核 Agent：负责反思和修正回答。
+    
+    这个 Agent 只做一件事——拿到用户问题和初步回答，用反思机制检查并修正。
+    它是回答质量的最后一道防线。
+    """
+    final_answer = reflect_and_correct(query, answer)
+    return final_answer
+
+def mutil_agent_pipeline(
+    user_message: str,
+    session_id: str,
+    client_history: list[ChatHistoryEntry],
+):
+    # 预处理（只在检索环节使用）
+   messages, references  = retrieval_agent(user_message, session_id, client_history)
+
+   # Agent 2：生成（使用重写后的查询，Prompt 更清晰）
+   initial_answer = generation_agent(messages)
+
+   # Agent 3：审核（使用原始消息！检查是否真正回答了用户的问题）
+   final_answer = review_agent(user_message, initial_answer)
+
+   return  {"answer": final_answer, "references": references}

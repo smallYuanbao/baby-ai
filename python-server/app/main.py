@@ -6,7 +6,7 @@ from datetime import timezone
 from fastapi.responses import StreamingResponse
 from app.models.chat import ChatRequest, ChatResponse
 from app.services.chat_service import execute_rag_pipeline, execute_rag_stream
-from app.services.agent import MCPClient, agent_chat, agent_chat_mcp, react_agent_chat, react_agent_with_reflection
+from app.services.agent import MCPClient, agent_chat, agent_chat_mcp, mutil_agent_pipeline, react_agent_chat, react_agent_with_reflection
 
 
 mcp_client = None
@@ -74,3 +74,10 @@ async def mcp_agent_chat(request: ChatRequest):
                 mcp_client.connect_sync(script)
     answer = await agent_chat_mcp(request.message, mcp_client)
     return {"answer": answer}
+
+
+
+@app.post("/api/agent/multi")
+def multi_agent_chat(request: ChatRequest):
+    result = mutil_agent_pipeline(request.message, request.session_id, request.history)
+    return result
