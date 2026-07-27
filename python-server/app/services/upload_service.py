@@ -42,7 +42,7 @@ import uuid
 
 from fastapi import HTTPException, UploadFile
 
-from app.services.rag import get_embedding
+from app.services.rag.embedding import get_embedding
 
 # ============================================================
 # 配置
@@ -405,7 +405,7 @@ def process_upload(file: UploadFile):
     # 每个 chunk 独立生成 embedding 向量（bge-m3, 1024 维）
     # id 格式：文件ID_序号，如 "a3f2b8c1_0", "a3f2b8c1_1"
     # metadata 记录了来源和归属文件，方便后续按文件过滤检索
-    from app.services.rag import chroma_client
+    from app.services.rag.embedding import chroma_client
     from app.core.config import CHROMA_USER_UPLOAD_COLLECTION
 
     # 写入第一个配置的 collection（通常是 rag_samples）

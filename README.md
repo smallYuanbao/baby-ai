@@ -454,7 +454,13 @@ baby-ai/
 │       └── utils/         # 工具函数
 ├── python-server/         # Python 后端服务（FastAPI）
 │   ├── app/
-│   │   └── services/      # RAG、Agent、Rerank、意图路由、文件上传等
+│   │   ├── services/
+│   │   │   ├── rag/       # 检索系统（embedding + retriever + reranker）
+│   │   │   ├── agent/     # Agent 逻辑（base + unified + reflection + mcp）
+│   │   │   ├── pipeline/  # 预处理管线（rewrite + intent + session + chat）
+│   │   │   └── upload/    # 文件上传
+│   │   ├── skills/        # Agent 技能（search + review + weather）
+│   │   └── models/        # Pydantic 模型
 │   └── scripts/           # 评估、灌库、基准测试脚本
 ├── reranker/              # BGE 重排序服务（独立部署）
 ├── mcp-server/            # MCP 天气服务（Agent 工具调用示例）

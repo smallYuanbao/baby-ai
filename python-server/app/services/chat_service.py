@@ -3,13 +3,13 @@ from typing import Optional
 
 from app.models.chat import ChatHistoryEntry, ChatMessage, Reference
 
-from app.services.rag import hybrid_search, hybrid_search_rrf
-from app.services.prompt import buildPrompt
+from app.services.rag.retriever import hybrid_search, hybrid_search_rrf
+from app.services.prompt import buildPrompt, buildPromptTest
 from app.services.llm import call_deepseek, generate_stream
-from app.services.query_rewrite import rewrite_query
-from app.services.intent_router import IntentResult, route_intent
-from app.services.session_manager import add_assitant_message, add_user_message, get_history
-from app.services.rerank import rerank
+from app.services.pipeline.rewrite import rewrite_query
+from app.services.pipeline.intent import IntentResult, route_intent
+from app.services.pipeline.session import add_assitant_message, add_user_message, get_history
+from app.services.rag.reranker import rerank
 
 def _build_messages(user_message: str, context_docs: list[str], histroy: Optional[list[ChatHistoryEntry]], intent_result: IntentResult ) -> list[ChatMessage]:
     messages = []
@@ -22,7 +22,7 @@ def _build_messages(user_message: str, context_docs: list[str], histroy: Optiona
             messages.append(ChatMessage(role=h.role, content=h.content))
 
     # 3. 最后一条 user 消息 — 用 buildPrompt 生成（RAG 上下文 + 问题）
-    user_content = buildPrompt(user_message, context_docs)
+    user_content = buildPromptTest(user_message, context_docs)
     messages.append(ChatMessage(role="user", content=user_content))
 
     return messages

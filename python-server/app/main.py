@@ -6,7 +6,7 @@ from datetime import timezone
 from fastapi.responses import StreamingResponse
 from app.models.chat import ChatRequest, ChatResponse
 from app.services.chat_service import execute_rag_pipeline, execute_rag_stream
-from app.services.agent import MCPClient, agent_chat, agent_chat_mcp, mutil_agent_pipeline, react_agent_chat, react_agent_with_reflection
+from app.services.agent import MCPClient, agent_chat, agent_chat_mcp, mutil_agent_pipeline, react_agent_chat, react_agent_with_reflection, unified_agent
 
 
 mcp_client = None
@@ -80,4 +80,22 @@ async def mcp_agent_chat(request: ChatRequest):
 @app.post("/api/agent/multi")
 def multi_agent_chat(request: ChatRequest):
     result = mutil_agent_pipeline(request.message, request.session_id, request.history)
+    return result
+
+
+import threading
+_lock = threading.Lock()
+
+@app.post("/api/agent/unified")
+async def unified_agent_chat(request: ChatRequest):
+    global mcp_client
+    if mcp_client is None:
+        with _lock:
+            # 双重检查：拿到锁后再确认一次，防止两个请求同时抢到 None
+            if mcp_client is None:
+                mcp_client = MCPClient()
+                import os
+                script = os.path.abspath("../mcp-server/weather_server.py")
+                mcp_client.connect_sync(script)
+    result = unified_agent(request.message, request.session_id, request.history, mcp_client)
     return result
