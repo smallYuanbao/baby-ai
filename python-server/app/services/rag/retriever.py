@@ -86,7 +86,9 @@ def sparse_search(query: str, top_k: int = 10) -> list[RAGDocument]:
         _init_bm25()
 
     query_tokens = list(jieba.cut(query))
-    scores = _bm25_model.get_scores(query_tokens)
+    # BM25 未初始化（ChromaDB 无数据时）→ 返回空，降级为纯 Dense 检索
+    if _bm25_model is None:
+        return []
 
     indexed_scores = []
     for i, score in enumerate(scores):

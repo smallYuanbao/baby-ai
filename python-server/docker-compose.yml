@@ -1,0 +1,96 @@
+services:
+  # ========== FastAPI 后端 ==========
+  backend:
+    build: .
+    container_name: baby-ai-backend
+    ports:
+      - "8002:8002"
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - RERANKER_URL=http://reranker:8001/rerank
+    depends_on:
+      chroma:
+        condition: service_started
+    # reranker 是可选的（不配 RERANKER_URL 也能用 DeepSeek 兜底）
+    # condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - baby-ai-network
+
+  # ========== ChromaDB 向量数据库 ==========
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: baby-ai-chroma
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+
+
+    restart: unless-stopped
+    networks:
+      - baby-ai-network
+
+  # ========== Reranker 重排序服务 ==========
+  reranker:
+    build: ../reranker
+    container_name: baby-ai-reranker
+    ports:
+      - "8001:8001"
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - baby-ai-network
+
+  # ========== Ollama 嵌入模型（自动拉取 bge-m3）==========
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: baby-ai-ollama-init
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "等待 Ollama 就绪..."
+        sleep 5
+        ollama pull bge-m3
+        echo "bge-m3 拉取完成"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=ollama:11434
+    depends_on:
+      ollama:
+        condition: service_started
+    networks:
+      - baby-ai-network
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: baby-ai-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    networks:
+      - baby-ai-network
+
+volumes:
+  chroma_data:
+  ollama_data:
+  hf_cache:
+
+networks:
+  baby-ai-network:
+    driver: bridge

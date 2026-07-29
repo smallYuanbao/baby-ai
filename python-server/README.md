@@ -16,6 +16,39 @@ source .venv/bin/activate
 uvicorn app.main:app --reload --port 8000
 ```
 
+## Docker 部署
+
+```bash
+# 1. 构建镜像（首次约 20-30 分钟，后续有缓存分钟级）
+docker compose build
+
+# 2. 启动所有服务（backend + chroma + ollama + reranker）
+docker compose up -d
+
+# 3. 首次启动后，往 ChromaDB 灌数据（二选一）
+docker compose exec backend python scripts/ingest_balanced.py
+
+# 4. 验证
+curl http://127.0.0.1:8002/api/health
+
+# 5. 停止
+docker compose down
+```
+
+**端口映射：**
+
+| 服务 | 端口 |
+|------|:---:|
+| Backend | 8002 |
+| ChromaDB | 8000 |
+| Ollama | 11434 |
+| Reranker | 8001 |
+
+**首次启动注意：**
+- Ollama 会自动拉取 `bge-m3` 模型（`ollama-init` 容器）
+- Reranker 首次需下载 BGE 模型（~2.2GB，有 volume 缓存，后续启动秒级）
+- ChromaDB 默认无数据，需运行 `ingest_balanced.py` 灌入
+
 ## API
 
 | 端点 | 方法 | 说明 |
