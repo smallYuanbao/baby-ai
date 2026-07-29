@@ -8,7 +8,7 @@ class ChatHistoryEntry(BaseModel):
 
 # ---------- 请求/响应模型 ----------
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(..., min_length=1)
     history: Optional[list[ChatHistoryEntry]] = None
     session_id: str
 
