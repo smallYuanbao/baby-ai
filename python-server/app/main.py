@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from datetime import datetime as Datetime
 from datetime import timezone
 
@@ -33,9 +33,14 @@ def chat(request: ChatRequest) -> ChatResponse:
 
 
 @app.post("/api/chat/stream")
-def chat_stream(request: ChatRequest):
+async def chat_stream(chat_req: ChatRequest, request: Request):       # ← 多一个参数
     return StreamingResponse(
-        execute_rag_stream(request.message, request.session_id, request.history),
+        execute_rag_stream(
+            chat_req.message, 
+            chat_req.session_id, 
+            chat_req.history,
+            request
+        ),
         media_type="text/event-stream",
     )
 

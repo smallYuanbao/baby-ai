@@ -1,11 +1,13 @@
 import json
 from typing import Optional
 
+from fastapi import Request
+
 from app.models.chat import ChatHistoryEntry, ChatMessage, Reference
 
 from app.services.rag.retriever import hybrid_search, hybrid_search_rrf
-from app.services.prompt import buildPrompt, buildPromptTest
-from app.services.llm import call_deepseek, generate_stream
+from app.services.prompt import buildPromptTest
+from app.services.llm import call_deepseek, generate_stream_with_interrupt_and_fallback
 from app.services.pipeline.rewrite import rewrite_query
 from app.services.pipeline.intent import IntentResult, route_intent
 from app.services.pipeline.session import add_assitant_message, add_user_message, get_history
@@ -100,24 +102,26 @@ def execute_rag_pipeline(
     return {"answer": answer, "references": references}
 
 
-def execute_rag_stream(
+async def execute_rag_stream(
     user_message: str,
     session_id: str,
     client_history: list[ChatHistoryEntry],
+    request: Request,
 ):
-    """流式 RAG 管道（生成器）"""
+    """流式 RAG 管道（异步生成器）"""
     messages, references = get_rag_context(
         user_message, session_id, client_history,
     )
 
-    # references 转成 dict 列表再 JSON 序列化（Pydantic 的 .model_dump()）
     refs_json = json.dumps(
         [r.model_dump() for r in references],
         ensure_ascii=False,
     )
     yield f"event: references\ndata: {refs_json}\n\n"
-    yield from generate_stream(messages)
+
+    async for chunk in generate_stream_with_interrupt_and_fallback(messages, request):
+        yield chunk
+
     yield f"event: done\ndata: {{}}\n\n"
 
-    # 更新服务端历史
     add_user_message(session_id, user_message)

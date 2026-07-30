@@ -1,5 +1,6 @@
 from typing import Optional
 
+from fastapi import Request
 from openai import OpenAI
 
 from app.core.config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
@@ -49,3 +50,43 @@ def generate_stream(
         delta = chunk.choices[0].delta.content
         if delta:
             yield delta
+
+
+async def generate_stream_with_interrupt_and_fallback(
+    messages: list[ChatMessage],
+    request: Request,
+    options: Optional[ChatOptions] = None,
+):
+    """带中断处理和错误兜底的流式生成器"""
+
+    generated_content = ""
+    try:
+        """调用 DeepSeek 生成流式回答"""
+        opts = options or ChatOptions()
+    
+        stream = deepseek_client.chat.completions.create(
+            model=opts.model or DEEPSEEK_MODEL,
+            messages=[{"role": m.role, "content": m.content} for m in messages],
+            temperature=opts.temperature if opts.temperature is not None else 0.7,
+            max_tokens=opts.maxTokens if opts.maxTokens is not None else 1000,
+            stream=True,
+        )
+
+        for chunk in stream:
+            # 每次 yield 前检查客户端是否还在连接
+            if await request.is_disconnected():
+                print("[流式] 客户端断开连接，终止生成")
+                break  # 停止生成，释放资源
+            delta = chunk.choices[0].delta.content
+            if delta:
+                generated_content += delta
+                yield delta
+    except Exception as e:
+        if generated_content:
+            # 返回已生成的内容 + 错误提示
+            yield f"\n\n[生成中断：{str(e)[:100]}，以上为已生成部分]"
+        else:
+            yield f"抱歉，服务暂时不可用，请稍后重试。"
+    finally:
+        # 无论成功、失败还是中断，确保资源被释放
+        stream.close()
