@@ -17,6 +17,8 @@ from app.skills.weather import WeatherSkill
 from app.skills import get_skill_by_name
 from app.services.agent.mcp_client import MCPClient
 from app.services.agent.reflection import review_agent
+from app.services.pipeline.security import detect_injection, sanitize_input
+from app.core.cost_tracker import cost_tracker
 
 
 MAX_STEPS = 5
@@ -218,12 +220,22 @@ def unified_agent(
     mcp_client: MCPClient
 ):
     """
-    统一 Agent 入口：集成预处理 → 工具决策 → RAG检索 → 生成 → 审核
-    
-    这是阶段3的收官函数，把前四天所有 Agent 能力整合到一个完整链路中。
+    统一 Agent 入口：安全过滤 → 预处理 → 工具决策 → RAG检索 → 生成 → 审核
     """
-    # 1. 预处理（只在检索环节使用）
+    # 0. 安全过滤（新增！）
+    user_message = sanitize_input(user_message)
+    if detect_injection(user_message):
+        return {"answer": "抱歉，检测到异常输入，请重新提问育儿相关问题。",
+                "references": [], "category": "blocked"}
 
+    # 0.5 缓存检查（新增）
+    cached = cost_tracker.get_cache(user_message)
+
+    if cached:
+        return { "answer": cached,  "references": [], "category": "cache_hit" }
+
+
+    # 1. 预处理（只在检索环节使用）
     message, history = get_query_rewrite(user_message, session_id, client_history)
     # 意图路由
     intent_result = route_intent(message)
@@ -252,6 +264,9 @@ def unified_agent(
 
     # ========== 6. 审核反思（用原始 user_message！）==========
     final_answer = review_agent(user_message, initial_answer)
+
+    # 最终回答存入缓存
+    cost_tracker.set_cache(user_message, final_answer)
 
     # ========== 7. 返回结果 ==========
     return {

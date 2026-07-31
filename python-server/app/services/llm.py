@@ -5,6 +5,7 @@ from openai import OpenAI
 
 from app.core.config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
 from app.models.chat import ChatMessage, ChatOptions
+from app.core.cost_tracker import cost_tracker
 
 # 初始化 DeepSeek 客户端
 deepseek_client = OpenAI(
@@ -27,6 +28,12 @@ def call_deepseek(
         max_tokens=opts.maxTokens if opts.maxTokens is not None else 1000,
         stream=False,
     )
+
+    if hasattr(response, 'usage') and response.usage:
+        cost_tracker.record(
+            prompt_tokens=response.usage.prompt_tokens,
+            completion_tokens=response.usage.completion_tokens
+        )
 
     return response.choices[0].message.content
 
@@ -72,15 +79,24 @@ async def generate_stream_with_interrupt_and_fallback(
             stream=True,
         )
 
+        last_chunk = None
         for chunk in stream:
-            # 每次 yield 前检查客户端是否还在连接
             if await request.is_disconnected():
                 print("[流式] 客户端断开连接，终止生成")
-                break  # 停止生成，释放资源
+                break
             delta = chunk.choices[0].delta.content
             if delta:
                 generated_content += delta
                 yield delta
+            last_chunk = chunk
+
+        # 最后一个 chunk 包含 usage 信息
+        if last_chunk and last_chunk.usage:
+            cost_tracker.record(
+                last_chunk.usage.prompt_tokens or 0,
+                last_chunk.usage.completion_tokens or 0,
+            )
+
     except Exception as e:
         if generated_content:
             # 返回已生成的内容 + 错误提示

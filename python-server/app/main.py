@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 from app.models.chat import ChatRequest, ChatResponse
 from app.services.chat_service import execute_rag_pipeline, execute_rag_stream
 from app.services.agent import MCPClient, agent_chat, agent_chat_mcp, mutil_agent_pipeline, react_agent_chat, react_agent_with_reflection, unified_agent
+from app.core.cost_tracker import cost_tracker
 
 
 mcp_client = None
@@ -104,3 +105,8 @@ async def unified_agent_chat(request: ChatRequest):
                 mcp_client.connect_sync(script)
     result = unified_agent(request.message, request.session_id, request.history, mcp_client)
     return result
+
+# 用量信息
+@app.get("/api/admin/cost")
+def get_cost():
+    return cost_tracker.get_daily_cost()
