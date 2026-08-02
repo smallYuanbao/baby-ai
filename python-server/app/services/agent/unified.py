@@ -19,6 +19,7 @@ from app.services.agent.mcp_client import MCPClient
 from app.services.agent.reflection import review_agent
 from app.services.pipeline.security import detect_injection, sanitize_input
 from app.core.cost_tracker import cost_tracker
+from app.services.memory.user_profile import extract_profile, get_profile, profile_to_prompt, save_profile
 
 
 MAX_STEPS = 5
@@ -234,6 +235,9 @@ def unified_agent(
     if cached:
         return { "answer": cached,  "references": [], "category": "cache_hit" }
 
+    # 0. 检索用户档案（长期记忆）
+    profile = get_profile(session_id)
+    profile_text = profile_to_prompt(profile) if profile else ""
 
     # 1. 预处理（只在检索环节使用）
     message, history = get_query_rewrite(user_message, session_id, client_history)
@@ -267,6 +271,20 @@ def unified_agent(
 
     # 最终回答存入缓存
     cost_tracker.set_cache(user_message, final_answer)
+
+    # 提取并保存用户档案（异步不阻塞，失败不影响主流程）
+    try:
+        new_profile = extract_profile(user_message, final_answer)
+        if new_profile:
+            # 合并已有档案（新信息覆盖旧信息）
+            if profile:
+                profile.update(new_profile)
+            else:
+                profile = new_profile
+            save_profile(session_id, profile)
+    except Exception as e:
+        print(f"[用户档案] 提取失败: {e}")
+    
 
     # ========== 7. 返回结果 ==========
     return {

@@ -24,12 +24,21 @@ DEFENSE_PROMPT = """
 """
 
 
-def _build_messages(user_message: str, context_docs: list[str], histroy: Optional[list[ChatHistoryEntry]], intent_result: IntentResult ) -> list[ChatMessage]:
+def _build_messages(
+    user_message: str,
+    context_docs: list[str],
+    histroy: Optional[list[ChatHistoryEntry]],
+    intent_result: IntentResult,
+    profile_text: str = "",  # 跨会话用户画像，注入 System Prompt
+) -> list[ChatMessage]:
     messages = []
 
-    # 1. System Prompt（意图路由产出 + 安全防护指令）
-    system_prompt = intent_result.prompt + DEFENSE_PROMPT
-    messages.append(ChatMessage(role="system", content=system_prompt))
+    # 1. System Prompt（意图路由 + 用户画像 + 安全指令）
+    parts = [intent_result.prompt]
+    if profile_text:
+        parts.append(profile_text)
+    parts.append(DEFENSE_PROMPT)
+    messages.append(ChatMessage(role="system", content="\n\n".join(parts)))
     # 2. 历史
     if histroy:
         for h in histroy:
