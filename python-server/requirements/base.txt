@@ -13,3 +13,4 @@ langchain_openai
 langchain-ollama
 mcp
 pytest
+langchain
