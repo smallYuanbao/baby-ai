@@ -10,7 +10,7 @@ import os
 # 把 python-server/ 加入模块搜索路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.services.rag import chroma_client
+from app.services.rag.embedding import chroma_client
 from app.core.config import SEARCH_COLLECTIONS
 
 # ---- 1. 从 ChromaDB 加载所有文档，建立 text开头 → id 的索引 ----

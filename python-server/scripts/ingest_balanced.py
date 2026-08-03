@@ -26,8 +26,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.services.rag import get_embedding, chroma_client
-from app.services.intent_router import KEYWORD_RULES, Intent
+from app.services.rag.embedding import get_embedding, chroma_client
+from app.services.pipeline.intent import KEYWORD_RULES, Intent
 
 # ============================================================
 # 配置

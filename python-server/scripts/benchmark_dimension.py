@@ -5,7 +5,7 @@ bge-m3 维度对比实验
 """
 import sys, os, time, json, numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from app.services.rag import chroma_client, get_embedding
+from app.services.rag.embedding import chroma_client, get_embedding
 
 
 def load_embeddings():

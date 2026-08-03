@@ -14,3 +14,5 @@ langchain-ollama
 mcp
 pytest
 langchain
+langgraph
+langsmith
