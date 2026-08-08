@@ -16,3 +16,6 @@ pytest
 langchain
 langgraph
 langsmith
+
+transformers
+torch
