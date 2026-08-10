@@ -10,6 +10,7 @@ from app.models.chat import ChatHistoryEntry, ChatMessage, Reference
 from app.services.chat_service import _build_messages
 from app.skills.weather import WeatherSkill
 from app.skills import get_skill_by_name
+from app.utils.logger import logger
 
 
 
@@ -105,7 +106,7 @@ class MCPClient:
             await self.session.initialize()
             response = await self.session.list_tools()
             self.tools = response.tools
-            print("[MCP] 已连接，可用工具:", json.dumps([t.model_dump()["name"] for t in self.tools], ensure_ascii=False, indent=2))
+            logger.info("[MCP] 已连接，可用工具: %s", json.dumps([t.model_dump()["name"] for t in self.tools], ensure_ascii=False, indent=2))
 
         # ---- 启动后台线程，创建独立事件循环 ----
         def _run_loop():
@@ -200,7 +201,7 @@ def agent_chat_mcp(user_message: str, mcp_client: MCPClient) -> str:
 
     msg = response.choices[0].message
 
-    print("-----  msg -----", msg)
+    logger.debug("-----  msg ----- %s", msg)
 
     if msg.tool_calls:
         # 3. LLM 要求调工具 → 通过 MCP 执行
@@ -208,12 +209,10 @@ def agent_chat_mcp(user_message: str, mcp_client: MCPClient) -> str:
         args = json.loads(tool_call.function.arguments)
 
 
-        print("------ args ------")
-        print(args)
+        logger.debug("------ args ------\n%s", args)
         result = mcp_client.call_tool(tool_call.function.name, args)
 
-        print("----- result -----")
-        print(result)
+        logger.debug("----- result -----\n%s", result)
         # 4. 把结果还给 LLM 生成最终回答
         final_response = deepseek_client.chat.completions.create(
             model="deepseek-v4-flash",

@@ -3,6 +3,7 @@ from  pydantic import BaseModel
 
 from app.services.llm import call_deepseek
 from app.models.chat import ChatMessage, ChatOptions
+from app.utils.logger import logger
 
 # 所有合法的意图标签集合，用于从 LLM 返回内容中提取有效意图
 VALID_INTENTS = {"illness", "feeding", "sleep", "development", "emergency", "daily_care", "vaccine", "general"}
@@ -351,7 +352,7 @@ def classify_by_llm(question: str) -> Intent:
         # 静默降级：LLM 不可用时（网络故障、API 限流、超时），
         # 返回 'general' 保证对话流程不中断
         # 不记录 error 级别日志，由调用方 routeIntent 统一记录
-        print(f"意图路由 [静默降级]: → LLM 不可用")
+        logger.warning("意图路由 [静默降级]: → LLM 不可用")
         return "general"
 
 def route_intent(question: str) -> IntentResult:
@@ -424,7 +425,7 @@ def route_intent(question: str) -> IntentResult:
     # Step 1: 关键词匹配（本地，<1ms）
     keyword_result = classify_by_keyword(question)
 
-    print("--- keyword_result ----", keyword_result)
+    logger.debug("--- keyword_result ---- %s", keyword_result)
 
     # 高置信度直接采纳 — 最快路径，零 LLM 成本
     if keyword_result and keyword_result.confidence >= 0.9:
@@ -442,7 +443,7 @@ def route_intent(question: str) -> IntentResult:
     # Step 2: 低于置信度阈值 → LLM 复核或从头分类
     # 关键词低置信度时记录日志，帮助排查是否误判
     if keyword_result:
-        print(f"意图路由 [关键词低置信]: {keyword_result.intent} ({keyword_result.confidence}) → LLM复核")
+        logger.warning("意图路由 [关键词低置信]: %s (%s) → LLM复核", keyword_result.intent, keyword_result.confidence)
 
     # 调用 DeepSeek 进行 LLM 分类（或复核）
     # 分类失败时 classifyByLLM 内部静默降级为 'general'

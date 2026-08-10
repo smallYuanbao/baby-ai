@@ -15,6 +15,7 @@ from app.services.pipeline.rewrite import rewrite_query
 from app.services.pipeline.session import get_history
 from app.skills.weather import WeatherSkill
 from app.skills import get_skill_by_name
+from app.utils.logger import logger
 # generation_agent / review_agent 在函数内懒加载，避免循环导入
 
 
@@ -76,24 +77,21 @@ def agent_chat(user_message: str) -> str:
             "total_tokens": response.usage.total_tokens if response.usage else 0,
         } if response.usage else None,
     }
-    print("---- response ----")
-    print(json.dumps(response_dict, ensure_ascii=False, indent=2))
+    logger.debug("---- response ----\n%s", json.dumps(response_dict, ensure_ascii=False, indent=2))
 
     if response.choices[0].message.tool_calls:
-        # LLM 说“我需要调工具”，拿到工具调用信息
+        # LLM 说"我需要调工具"，拿到工具调用信息
         tool_call = response.choices[0].message.tool_calls[0]
         tool_name = tool_call.function.name
         tool_args = json.loads(tool_call.function.arguments)
 
-        print("-----  tool_args -----")
-        print(tool_args)
+        logger.debug("-----  tool_args -----\n%s", tool_args)
 
         # 执行工具
         tool_func = TOOL_MAP[tool_name]
         tool_result = tool_func(**tool_args)
 
-        print("---- tool_result ----")
-        print(tool_result)
+        logger.debug("---- tool_result ----\n%s", tool_result)
 
         # 把工具返回结果告诉 LLM，让它继续生成回答
         messages.append({
@@ -115,8 +113,7 @@ def agent_chat(user_message: str) -> str:
             max_tokens=1000
         )
 
-        print("---- final_response ----")
-        print(final_response)
+        logger.debug("---- final_response ----\n%s", final_response)
         return final_response.choices[0].message.content
     
     return response.choices[0].message.content
@@ -127,11 +124,11 @@ SYSTEM_PROMPT = """你是一个严谨的数据查询与任务执行助手。
 工作原则：
 1. 凡是需要实时数据（天气、新闻、股价）或超出你知识截止日期（2025年5月）的问题，必须调用函数获取，禁止凭记忆编造。
 2. 如果函数返回的数据不足以回答用户（如数据为空或只包含部分信息），请再次调用函数补充，直到信息完整。
-3. 若同一函数连续调用 2 次仍返回错误或空数据，请停止尝试，并直接告知用户：“暂时无法获取数据，请稍后重试。”
+3. 若同一函数连续调用 2 次仍返回错误或空数据，请停止尝试，并直接告知用户："暂时无法获取数据，请稍后重试。"
 
 输出规范：
 - 需要调用工具时，直接输出 tool_calls 指令。
-- 需要回答用户时，直接输出自然语言文本，不需要添加任何额外前缀（如“Final Answer:”）。"""
+- 需要回答用户时，直接输出自然语言文本，不需要添加任何额外前缀（如"Final Answer:"）。"""
 
 MAX_STEPS = 5
 
@@ -185,26 +182,23 @@ def react_agent_chat(user_message: str):
                 "total_tokens": response.usage.total_tokens if response.usage else 0,
             } if response.usage else None,
         }
-        print("---- response ----")
-        print(json.dumps(response_dict, ensure_ascii=False, indent=2))
+        logger.debug("---- response ----\n%s", json.dumps(response_dict, ensure_ascii=False, indent=2))
 
         response_message = response.choices[0].message
-        
+
         if response_message.tool_calls:
-            # LLM 说“我需要调工具”，拿到工具调用信息
+            # LLM 说"我需要调工具"，拿到工具调用信息
             tool_call = response.choices[0].message.tool_calls[0]
             tool_name = tool_call.function.name
             tool_args = json.loads(tool_call.function.arguments)
 
-            print("-----  tool_args -----")
-            print(tool_args)
+            logger.debug("-----  tool_args -----\n%s", tool_args)
 
             # 执行工具
             tool_func = TOOL_MAP[tool_name]
             tool_result = tool_func(**tool_args)
 
-            print("---- tool_result ----")
-            print(tool_result)
+            logger.debug("---- tool_result ----\n%s", tool_result)
 
             # 把工具返回结果告诉 LLM，让它继续生成回答
             messages.append({
@@ -253,7 +247,7 @@ def retrieval_agent(
 
     # 3. 意图路由
     intent_result = route_intent(message)
-    print(f"[意图路由] 类别: {intent_result.intent}")
+    logger.info("[意图路由] 类别: %s", intent_result.intent)
 
     # 4. RAG 检索（后）— emergency 跳过
     if intent_result.intent == "emergency":

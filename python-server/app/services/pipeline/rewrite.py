@@ -4,6 +4,7 @@ from typing import Optional
 from app.core.config import QUERY_REWRITE_ENABLED
 from app.models.chat import RewriteResult, ChatHistoryEntry, ChatMessage
 from app.services.llm import call_deepseek
+from app.utils.logger import logger
 
 PRONOUN_PATTERN = re.compile(r"他|她|它|他们|她们|它们|这些|那些|这个|那个|这里|那里|这样|那样")
 
@@ -43,7 +44,7 @@ def rewrite_query(message: str, histroy: list[ChatHistoryEntry]) -> RewriteResul
             originalQuery=message, rewrittenQuery=rewritten, wasRewritten=True,
         )
     except Exception as e:
-        print(f"查询改写失败: {e}")
+        logger.error("查询改写失败: %s", e)
         return RewriteResult(
             originalQuery=message, rewrittenQuery=message, wasRewritten=False,
         )

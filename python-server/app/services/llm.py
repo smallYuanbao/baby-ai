@@ -6,6 +6,7 @@ from openai import OpenAI
 from app.core.config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
 from app.models.chat import ChatMessage, ChatOptions
 from app.core.cost_tracker import cost_tracker
+from app.utils.logger import logger
 
 # 初始化 DeepSeek 客户端
 deepseek_client = OpenAI(
@@ -82,7 +83,7 @@ async def generate_stream_with_interrupt_and_fallback(
         last_chunk = None
         for chunk in stream:
             if await request.is_disconnected():
-                print("[流式] 客户端断开连接，终止生成")
+                logger.warning("[流式] 客户端断开连接，终止生成")
                 break
             delta = chunk.choices[0].delta.content
             if delta:

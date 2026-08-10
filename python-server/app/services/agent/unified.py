@@ -20,6 +20,7 @@ from app.services.agent.reflection import review_agent
 from app.services.pipeline.security import detect_injection, sanitize_input
 from app.core.cost_tracker import cost_tracker
 from app.services.memory.user_profile import extract_profile, get_profile, profile_to_prompt, save_profile
+from app.utils.logger import logger
 
 
 MAX_STEPS = 5
@@ -261,8 +262,7 @@ def unified_agent(
     doc_texts = [d.text if isinstance(d, Reference) else d for d in context_docs]
     messages = _build_messages(message, doc_texts, history, intent_result)
 
-    print("----- messages -----")
-    print(messages)
+    logger.debug("----- messages -----\n%s", messages)
 
     initial_answer = generation_agent(messages)
 
@@ -283,7 +283,7 @@ def unified_agent(
                 profile = new_profile
             save_profile(session_id, profile)
     except Exception as e:
-        print(f"[用户档案] 提取失败: {e}")
+        logger.error("[用户档案] 提取失败: %s", e)
     
 
     # ========== 7. 返回结果 ==========

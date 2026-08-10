@@ -1,5 +1,6 @@
-
 from collections import OrderedDict
+
+from app.utils.logger import logger
 
 
 class CostTracker:
@@ -24,9 +25,7 @@ class CostTracker:
         """记录一次 LLM 调用的 Token 消耗"""
         self.daily_prompt_tokens += prompt_tokens
         self.daily_completion_tokens += completion_tokens
-        print("----- 消耗用量 -----")
-        print(prompt_tokens)
-        print(completion_tokens)
+        logger.info("消耗用量 | prompt_tokens=%s, completion_tokens=%s", prompt_tokens, completion_tokens)
 
     # ---- 高频问答缓存 ----
     def get_cache(self, query: str) -> str | None:

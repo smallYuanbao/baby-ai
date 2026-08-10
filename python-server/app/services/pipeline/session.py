@@ -1,4 +1,5 @@
 from app.models.chat import ChatHistoryEntry
+from app.utils.logger import logger
 
 # 内存存储：session_id → 消息列表
 _sessions: dict[str, list[ChatHistoryEntry]] = {}
@@ -8,7 +9,7 @@ MAX_ROUNDS = 10
 
 def get_history(session_id: str) -> list[ChatHistoryEntry]: 
     """获取指定会话的对话历史"""
-    print("--- get_history ---", _sessions)
+    logger.debug("--- get_history --- %s", _sessions)
     return _sessions.get(session_id, [])
 
 def add_message(session_id: str, role: str, content: str) -> None:
@@ -33,14 +34,14 @@ def add_user_message(session_id: str, content: str) -> None:
     """追加用户消息"""
     add_message(session_id, "user", content)
 
-    print(f"--- 存入成功 --- session={session_id}, 当前消息数={len(_sessions[session_id])}")
+    logger.info("--- 存入成功 --- session=%s, 当前消息数=%s", session_id, len(_sessions[session_id]))
 
 
 def add_assitant_message(session_id: str, content: str) -> None:
     """追加 AI 回答"""
     add_message(session_id, "assistant",content)
 
-    print(f"--- 存入成功 --- session={session_id}, 当前消息数={len(_sessions[session_id])}")
+    logger.info("--- 存入成功 --- session=%s, 当前消息数=%s", session_id, len(_sessions[session_id]))
 
 
 

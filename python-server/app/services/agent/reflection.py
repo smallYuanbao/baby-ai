@@ -10,6 +10,7 @@ from app.models.chat import ChatHistoryEntry, ChatMessage, Reference
 from app.services.chat_service import _build_messages
 from app.skills.weather import WeatherSkill
 from app.skills import get_skill_by_name
+from app.utils.logger import logger
 
 
 
@@ -67,9 +68,7 @@ def reflect_and_correct(user_message: str, initial_answer: str) -> str:
     finish = response.choices[0].finish_reason
     usage = response.usage
 
-    print(f"------ review (finish_reason={finish}, tokens={usage.completion_tokens if usage else '?'}) ------")
-
-    print(review)
+    logger.debug("------ review (finish_reason=%s, tokens=%s) ------\n%s", finish, usage.completion_tokens if usage else '?', review)
 
     if "审核通过" in review:
         return initial_answer

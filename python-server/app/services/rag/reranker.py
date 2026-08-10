@@ -34,6 +34,7 @@ from typing import Optional
 from app.core.config import RERANKER_URL
 from app.models.chat import ChatMessage, ChatOptions, RAGDocument
 from app.services.llm import call_deepseek
+from app.utils.logger import logger
 
 
 # ============================================================
@@ -145,7 +146,7 @@ def rerank_with_bge(query: str, docs: list[RAGDocument], top_k: int):
         #   - requests.exceptions.Timeout：超时
         #   - requests.exceptions.HTTPError：HTTP 4xx/5xx
         #   - KeyError：响应格式不符合预期
-        print(f"BGE Reranker 不可用 ({e})，回退到 DeepSeek 排序")
+        logger.warning("BGE Reranker 不可用 (%s)，回退到 DeepSeek 排序", e)
         return None
 
 
@@ -346,14 +347,14 @@ def rerank(query: str, docs: list[RAGDocument], top_k: int):
     # ============================================================
     if not ranked:
         try:
-            print("---docs---", docs)
+            logger.debug("---docs--- %s", docs)
             ranked = rerank_with_llm(query, docs, top_k)
         except Exception as e:
             # ============================================================
             # 最终兜底：连 DeepSeek 也失败了 → 按原始向量距离排序
             # ============================================================
             # 这是最后的防线，确保无论发生什么都能返回结果
-            print(f"DeepSeek 排序也失败: {e}，使用原始检索结果")
+            logger.error("DeepSeek 排序也失败: %s，使用原始检索结果", e)
 
             # sorted() 返回一个新列表，不修改原列表
             # distance 越小文档越相关 → 升序排列
@@ -367,7 +368,7 @@ def rerank(query: str, docs: list[RAGDocument], top_k: int):
             ranked = result
 
 
-    print("Deepseek rerank 长度：", len(ranked))
+    logger.info("Deepseek rerank 长度：%s", len(ranked))
     # ============================================================
     # 兜底补齐：精排结果不足 top_k 时，用原始文档补足
     # ============================================================

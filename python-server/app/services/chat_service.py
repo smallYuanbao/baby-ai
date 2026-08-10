@@ -12,6 +12,7 @@ from app.services.pipeline.rewrite import rewrite_query
 from app.services.pipeline.intent import IntentResult, route_intent
 from app.services.pipeline.session import add_assitant_message, add_user_message, get_history
 from app.services.rag.reranker import rerank
+from app.utils.logger import logger
 
 # 防注入安全指令（追加到所有 System Prompt 末尾）
 DEFENSE_PROMPT = """
@@ -79,7 +80,7 @@ def get_rag_context(
 
     # 3. 意图路由
     intent_result = route_intent(message)
-    print(f"[意图路由] 类别: {intent_result.intent}")
+    logger.info("[意图路由] 类别: %s", intent_result.intent)
 
     # 4. RAG 检索（后）— emergency 跳过
     if intent_result.intent == "emergency":

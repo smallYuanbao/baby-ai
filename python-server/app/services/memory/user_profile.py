@@ -2,6 +2,7 @@ import json
 
 from app.services.rag import chroma_client
 from app.services.llm import deepseek_client
+from app.utils.logger import logger
 
 PROFILE_COLLECTION = "user_profiles"
 
@@ -11,7 +12,7 @@ def _ensure_collection():
     try:
         return chroma_client.get_or_create_collection(PROFILE_COLLECTION)
     except Exception as e:
-        print(f"[用户档案] 获取集合失败: {e}")
+        logger.error("[用户档案] 获取集合失败: %s", e)
         return None
 
 def extract_profile(user_message: str, assistant_answer: str) -> dict:
@@ -42,20 +43,20 @@ JSON："""
         temperature=0,
         max_tokens=200
     )
-    print(f"[用户档案] LLM 原始响应: finish={resp.choices[0].finish_reason} tokens={resp.usage.completion_tokens if resp.usage else '?'}")
+    logger.debug("[用户档案] LLM 原始响应: finish=%s tokens=%s", resp.choices[0].finish_reason, resp.usage.completion_tokens if resp.usage else '?')
     try:
         raw = resp.choices[0].message.content
         if not raw or not raw.strip():
-            print("[用户档案] LLM 返回空内容，跳过提取")
+            logger.warning("[用户档案] LLM 返回空内容，跳过提取")
             return {}
         profile = json.loads(raw)
         if profile:
-            print(f"[用户档案] 提取成功: {profile}")
+            logger.info("[用户档案] 提取成功: %s", profile)
         else:
-            print("[用户档案] 无有效信息可提取")
+            logger.warning("[用户档案] 无有效信息可提取")
         return profile
     except json.JSONDecodeError as e:
-        print(f"[用户档案] 提取失败(JSON解析): {e}, raw={raw[:100]}")
+        logger.error("[用户档案] 提取失败(JSON解析): %s, raw=%s", e, raw[:100])
         return {}
 
 def save_profile(session_id: str, profile: dict):
@@ -71,16 +72,16 @@ def save_profile(session_id: str, profile: dict):
     try:
         col = _ensure_collection()
         if col is None:
-            print("[用户档案] 保存失败: 无法获取集合")
+            logger.error("[用户档案] 保存失败: 无法获取集合")
             return
         col.upsert(
             documents=[profile_text],
             ids=[f"profile_{session_id}"],
             metadatas=[{"session_id": session_id}]
         )
-        print(f"[用户档案] 保存成功: session={session_id} profile={profile}")
+        logger.info("[用户档案] 保存成功: session=%s profile=%s", session_id, profile)
     except Exception as e:
-        print(f"[用户档案] 保存失败: {e}")
+        logger.error("[用户档案] 保存失败: %s", e)
 
 def get_profile(session_id: str) -> dict | None:
     """根据 session_id 检索用户档案"""
@@ -91,11 +92,11 @@ def get_profile(session_id: str) -> dict | None:
         result = col.get(ids=[f"profile_{session_id}"])
         if result and result['documents']:
             profile = json.loads(result['documents'][0])
-            print(f"[用户档案] 命中: session={session_id} profile={profile}")
+            logger.info("[用户档案] 命中: session=%s profile=%s", session_id, profile)
             return profile
-        print(f"[用户档案] 未命中: session={session_id}")
+        logger.info("[用户档案] 未命中: session=%s", session_id)
     except Exception as e:
-        print(f"[用户档案] 检索失败: {e}")
+        logger.error("[用户档案] 检索失败: %s", e)
 
     return None
 
