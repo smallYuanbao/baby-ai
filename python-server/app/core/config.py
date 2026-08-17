@@ -25,3 +25,18 @@ OLLAMA_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "bge-m3")
 QUERY_REWRITE_ENABLED = os.getenv("QUERY_REWRITE_ENABLED", "").lower() in ["true", "1", "yes"]
 
 RERANKER_URL = os.getenv("RERANKER_URL", "http://127.0.0.1:8001/rerank")
+
+
+# ---------- LLM 调用加固（超时 / 熔断 / 备用模型） ----------
+
+# LLM 单次调用超时（秒），防止无限等待
+LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "60"))
+
+# 熔断器参数
+BREAKER_FAILURE_THRESHOLD = int(os.getenv("BREAKER_FAILURE_THRESHOLD", "5"))
+BREAKER_OPEN_TIMEOUT = int(os.getenv("BREAKER_OPEN_TIMEOUT", "30"))
+
+# 备用模型（留空位：配置了 FALLBACK_API_KEY 才启用真实切换，否则走降级兜底文案）
+FALLBACK_API_KEY = os.getenv("FALLBACK_API_KEY")
+FALLBACK_BASE_URL = os.getenv("FALLBACK_BASE_URL")
+FALLBACK_MODEL = os.getenv("FALLBACK_MODEL")
