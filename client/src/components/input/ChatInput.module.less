@@ -159,6 +159,43 @@
 }
 
 // ---------------------------------------------------------------------------
+// Stop Button — replaces the send button while a response is streaming
+// ---------------------------------------------------------------------------
+
+.stopButton {
+  // Same footprint as .sendButton so the input row layout doesn't shift
+  // when the button toggles between send / stop.
+  flex-shrink: 0;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: @radius-2xl;
+  background: @red-500;
+  color: @white;
+  transition: all @transition-base;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: @shadow-sm;
+  min-width: 44px;
+  min-height: 44px;
+
+  &:hover {
+    // No @red-600 token exists, so darken via filter instead of a new variable.
+    filter: brightness(0.9);
+  }
+
+  &:active {
+    filter: brightness(0.8);
+    transform: scale(0.95);
+  }
+}
+
+.stopIcon {
+  width: @space-4;
+  height: @space-4;
+}
+
+// ---------------------------------------------------------------------------
 // Hint / Disclaimer
 // ---------------------------------------------------------------------------
 

@@ -152,16 +152,19 @@ async function uploadFile<T>(file: File): Promise<T> {
 async function chatSSE(
   message: string,
   history: { role: 'user' | 'assistant'; content: string }[],
+  sessionId: string,
   fileId?: string,
 ): Promise<Response> {
-  const url = `${config.apiBaseUrl}/chat?stream=true`;
+  // python-server 的流式端点是独立的 `/chat/stream`（非 TS server 的
+  // `/chat?stream=true`）。`session_id` 为 python-server 的 ChatRequest 必填字段。
+  const url = `${config.apiBaseUrl}/chat/stream`;
 
   // Return the raw Response so callers can consume the SSE stream
   // via response.body.getReader() — we intentionally skip .json() here.
   return fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, history, fileId }),
+    body: JSON.stringify({ message, history, session_id: sessionId, file_id: fileId }),
   });
 }
 

@@ -13,8 +13,8 @@
  * - Configures the dev server to listen on all network interfaces (0.0.0.0)
  *   so the app is accessible from other devices on the local network (e.g. for
  *   mobile or cross-machine testing).
- * - Proxies `/api/*` requests to the backend server running on port 3001,
- *   avoiding CORS issues during local development.
+ * - Proxies `/api/*` requests to the backend server running on port 8002
+ *   (python-server / FastAPI), avoiding CORS issues during local development.
  */
 
 import { defineConfig } from 'vite';
@@ -57,18 +57,21 @@ export default defineConfig({
      * Reverse-proxy rules applied by the Vite dev server.
      *
      * During development, the React app runs on port 5173 while the backend
-     * API server runs on port 3001. Without proxying, API calls from the
-     * browser to a different port would trigger CORS preflight requests.
+     * API server runs on port 8002（python-server）。Without proxying, API calls
+     * from the browser to a different port would trigger CORS preflight requests.
      * These proxy rules forward matching requests to the backend transparently,
      * so the browser sees them as same-origin.
      */
     proxy: {
+      // 单后端：所有 /api 请求统一走 python-server（8002）。
+      // growth/play/upload/chat/health 已全部迁移到 FastAPI，TS server（3001）
+      // 不再承担业务流量。
       '/api': {
         /**
          * Backend API server base URL.
          * All requests whose path starts with `/api` are forwarded here.
          */
-        target: 'http://localhost:3001',
+        target: 'http://localhost:8002',
 
         /**
          * Changes the `Origin` header of the proxied request to match the

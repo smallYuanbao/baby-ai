@@ -224,7 +224,7 @@ export function useChat() {
       // The factory callback defers API call construction until connect()
       // has set up the underlying EventSource.
       await connect(
-        () => api.chatSSE(text.trim(), history, fileId),
+        () => api.chatSSE(text.trim(), history, sessionIdRef.current, fileId),
         {
           // --- Token streaming (batched) ---
           // Tokens are accumulated in a ref and flushed every 50 ms to reduce
@@ -376,6 +376,45 @@ export function useChat() {
     sessionIdRef.current = generateId();
   }, [disconnect]);
 
+  /**
+   * Stop the in-flight assistant generation, keeping whatever has already
+   * been streamed.
+   *
+   * ## Why this exists
+   *
+   * While `isStreaming` is true the send button toggles into a "stop" button.
+   * Stopping is a *soft* abort: we disconnect the SSE stream (which triggers
+   * the backend's `request.is_disconnected()` check so it stops generating),
+   * flush any tokens still sitting in the 50 ms batch buffer, finalise the
+   * placeholder message with its partial content, and release the streaming
+   * lock so the user can immediately send a follow-up.
+   *
+   * Contrast with {@link clearChat}, which also disconnects but additionally
+   * wipes the message list and rotates the session ID.
+   *
+   * @returns `void` — fire-and-forget; the streaming message is finalised
+   *   synchronously and the next `sendMessage` is unblocked.
+   */
+  const stopGenerating = useCallback(() => {
+    // Abort the SSE fetch. The backend's is_disconnected() check notices the
+    // client is gone and stops generating (see llm.py).
+    disconnect();
+    // Flush tokens still buffered so the user keeps the partial answer.
+    if (tokenTimerRef.current) {
+      clearTimeout(tokenTimerRef.current);
+      tokenTimerRef.current = null;
+    }
+    flushTokenBatch();
+    // Finalise the streaming message: keep its content, clear the streaming flag.
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === streamingMsgIdRef.current ? { ...m, isStreaming: false } : m,
+      ),
+    );
+    // Release the send lock.
+    setIsStreaming(false);
+  }, [disconnect, flushTokenBatch]);
+
   return {
     messages,
     isStreaming,
@@ -384,6 +423,7 @@ export function useChat() {
     sendMessage,
     retryLast,
     clearChat,
+    stopGenerating,
     disconnect,
   };
 }

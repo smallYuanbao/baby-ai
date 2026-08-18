@@ -37,6 +37,7 @@ export function ChatContainer() {
     sendMessage,
     retryLast,
     clearChat,
+    stopGenerating,
   } = useChat();
 
   const { isSupported: ttsSupported, speak, stop: stopSpeaking } = useSpeechSynthesis();
@@ -91,6 +92,8 @@ export function ChatContainer() {
       <ChatInput
         onSend={sendMessage}
         disabled={isStreaming}
+        isStreaming={isStreaming}
+        onStop={stopGenerating}
       />
     </div>
   );

@@ -37,6 +37,16 @@ interface ChatInputProps {
    * Useful while the assistant is generating a response or during loading states.
    */
   disabled?: boolean;
+  /**
+   * When `true`, the send button is replaced by a stop button so the user can
+   * interrupt the in-flight generation. The rest of the input stays disabled.
+   */
+  isStreaming?: boolean;
+  /**
+   * Callback fired when the stop button is clicked. Should abort the active
+   * stream and finalise the partial assistant message.
+   */
+  onStop?: () => void;
 }
 
 /**
@@ -48,7 +58,7 @@ interface ChatInputProps {
  *
  * Keyboard shortcut: `Enter` sends the message; `Shift + Enter` inserts a newline.
  */
-export function ChatInput({ onSend, disabled }: ChatInputProps) {
+export function ChatInput({ onSend, disabled, isStreaming, onStop }: ChatInputProps) {
   /** Raw text value of the input area. */
   const [text, setText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -174,19 +184,33 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
           />
         </div>
 
-        {/* Send button — disabled when the textarea is empty or the component is locked. */}
-        <button
-          onClick={handleSend}
-          disabled={!text.trim() || disabled}
-          className={styles.sendButton}
-          title="发送消息"
-          // aria-label would be redundant here because `title` already provides
-          // an accessible name and the SVG is decorative.
-        >
-          <svg className={styles.sendIcon} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-          </svg>
-        </button>
+        {/* While streaming, swap the send button for a stop button so the user
+            can interrupt generation; otherwise show the normal send button. */}
+        {isStreaming ? (
+          <button
+            onClick={onStop}
+            className={styles.stopButton}
+            title="停止生成"
+            aria-label="停止生成"
+          >
+            <svg className={styles.stopIcon} viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="6" width="12" height="12" rx="2" />
+            </svg>
+          </button>
+        ) : (
+          <button
+            onClick={handleSend}
+            disabled={!text.trim() || disabled}
+            className={styles.sendButton}
+            title="发送消息"
+            // aria-label would be redundant here because `title` already provides
+            // an accessible name and the SVG is decorative.
+          >
+            <svg className={styles.sendIcon} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Keyboard shortcut hint — informs the user that Enter sends and Shift+Enter inserts a newline. */}
