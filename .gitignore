@@ -213,6 +213,8 @@ celerybeat.pid
 # Uploads
 uploads/*
 !uploads/.gitkeep
+python-server/uploads/*
+!python-server/uploads/.gitkeep
 
 # C extension artifacts
 *.so

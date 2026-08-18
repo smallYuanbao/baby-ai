@@ -13,7 +13,7 @@ uv pip install -r requirements/base.txt
 ```bash
 cd python-server
 source .venv/bin/activate
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8002
 ```
 
 ## Docker 部署
