@@ -40,3 +40,14 @@ BREAKER_OPEN_TIMEOUT = int(os.getenv("BREAKER_OPEN_TIMEOUT", "30"))
 FALLBACK_API_KEY = os.getenv("FALLBACK_API_KEY")
 FALLBACK_BASE_URL = os.getenv("FALLBACK_BASE_URL")
 FALLBACK_MODEL = os.getenv("FALLBACK_MODEL")
+
+
+# ---------- 缓存（高并发四件套 §4） ----------
+# 检索结果 / 常见问题答案的进程内缓存，TTL 秒数 + 最大条目数
+RAG_CACHE_TTL = int(os.getenv("RAG_CACHE_TTL", "300"))
+RAG_CACHE_MAXSIZE = int(os.getenv("RAG_CACHE_MAXSIZE", "512"))
+
+
+# ---------- growth 成长记录存储（SQLite） ----------
+# 宝宝档案 + 成长记录的持久化路径（SQLite 单文件，替代原 Express 的 JSON 文件方案）
+GROWTH_DB_PATH = os.getenv("GROWTH_DB_PATH", "data/growth.db")

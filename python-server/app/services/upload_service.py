@@ -430,4 +430,5 @@ def process_upload(file: UploadFile):
         "message": "上传成功",
         "file_id": file_id,
         "chunks_count": len(chunks),
+        "size": os.path.getsize(file_path),
     }

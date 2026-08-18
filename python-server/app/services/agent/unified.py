@@ -18,12 +18,16 @@ from app.skills import get_skill_by_name
 from app.services.agent.mcp_client import MCPClient
 from app.services.agent.reflection import review_agent
 from app.services.pipeline.security import detect_injection, sanitize_input
-from app.core.cost_tracker import cost_tracker
 from app.services.memory.user_profile import extract_profile, get_profile, profile_to_prompt, save_profile
+from app.core.cache import TTLCache
+from app.core.config import RAG_CACHE_TTL, RAG_CACHE_MAXSIZE
 from app.utils.logger import logger
 
 
 MAX_STEPS = 5
+
+# 答案缓存：替换 cost_tracker 里旧的无 TTL 无锁缓存（统一用 TTLCache）
+answer_cache = TTLCache(maxsize=RAG_CACHE_MAXSIZE, ttl=RAG_CACHE_TTL)
 
 # 注册所有可用工具
 AVAILABLE_TOOLS = [WEATHER_TOOL]
@@ -231,7 +235,7 @@ def unified_agent(
                 "references": [], "category": "blocked"}
 
     # 0.5 缓存检查（新增）
-    cached = cost_tracker.get_cache(user_message)
+    cached = answer_cache.get(user_message)
 
     if cached:
         return { "answer": cached,  "references": [], "category": "cache_hit" }
@@ -270,7 +274,7 @@ def unified_agent(
     final_answer = review_agent(user_message, initial_answer)
 
     # 最终回答存入缓存
-    cost_tracker.set_cache(user_message, final_answer)
+    answer_cache.set(user_message, final_answer)
 
     # 提取并保存用户档案（异步不阻塞，失败不影响主流程）
     try:

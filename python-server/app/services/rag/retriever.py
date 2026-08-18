@@ -1,7 +1,7 @@
 import jieba
 from rank_bm25 import BM25Okapi
 
-from app.core.config import SEARCH_COLLECTIONS
+from app.core.config import SEARCH_COLLECTIONS, CHROMA_USER_UPLOAD_COLLECTION
 from app.models.chat import RAGDocument
 from app.services.rag.embedding import get_embedding, chroma_client
 
@@ -40,6 +40,35 @@ def search_docs(query: str, top_k: int = 3) -> list[RAGDocument]:
 
     all_docs.sort(key=lambda d: d.distance)
     return all_docs[:top_k]
+
+
+def search_by_file(query: str, file_id: str, top_k: int = 5) -> list[RAGDocument]:
+    """按 file_id 检索用户上传的文档（文件上下文打通）。
+
+    上传流程会把文件分块写入独立的 `rag_user_uploads` collection，
+    每块 metadata 带 `file_id`。这里用 ChromaDB 的 where 过滤，
+    只召回该文件内与 query 最相关的 chunks。
+    """
+    query_embedding = get_embedding(query)
+    coll = chroma_client.get_or_create_collection(name=CHROMA_USER_UPLOAD_COLLECTION)
+    results = coll.query(
+        query_embeddings=[query_embedding],
+        n_results=top_k,
+        where={"file_id": file_id},
+        include=["documents", "distances", "metadatas"],
+    )
+    ids = results.get("ids", [[]])[0]
+    docs = results.get("documents", [[]])[0]
+    distances = results.get("distances", [[]])[0]
+    metadatas_list = results.get("metadatas", [[]])[0] if results.get("metadatas") else []
+
+    out = []
+    for i in range(len(docs)):
+        metadata = metadatas_list[i] if i < len(metadatas_list) else None
+        out.append(RAGDocument(id=ids[i], text=docs[i], distance=distances[i], metadata=metadata))
+
+    out.sort(key=lambda d: d.distance)
+    return out
 
 
 # ============================================================

@@ -11,6 +11,7 @@ class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1)
     history: Optional[list[ChatHistoryEntry]] = None
     session_id: str
+    file_id: Optional[str] = None  # 用户上传文件的 ID，命中则额外检索该文件内容
 
 class Reference(BaseModel):
     id: str     # 文档在 ChromaDB 中的唯一 ID（如 med_fbacde39）
