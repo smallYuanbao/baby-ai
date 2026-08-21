@@ -238,7 +238,8 @@ def retrieval_agent(
     """
 
     # 1. 取服务端历史（如果客户端没传，用服务端的）
-    server_history = get_history(session_id)
+    # agent 端点暂未接鉴权，统一归到匿名用户（方案 A 的隔离范围是 growth/upload/chat）
+    server_history = get_history("user_anonymous", session_id)
     history = client_history if client_history else server_history
 
     # 2. 改写

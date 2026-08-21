@@ -51,6 +51,7 @@ from app.models.growth import (
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS children (
     child_id   TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL,
     name       TEXT NOT NULL,
     birth_date TEXT NOT NULL,
     gender     TEXT NOT NULL,
@@ -81,7 +82,7 @@ def _now() -> str:
 
 
 def _connect() -> sqlite3.Connection:
-    """新建 SQLite 连接，并确保 schema 存在（幂等）"""
+    """新建 SQLite 连接，并确保 schema 存在（幂等）+ 轻量迁移"""
     parent = os.path.dirname(GROWTH_DB_PATH)
     if parent:
         os.makedirs(parent, exist_ok=True)
@@ -89,7 +90,23 @@ def _connect() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")  # 启用外键级联删除
     conn.executescript(_SCHEMA)
+    _migrate_user_id(conn)
     return conn
+
+
+def _migrate_user_id(conn: sqlite3.Connection) -> None:
+    """给旧库的 children 表补 user_id 列（幂等迁移）。
+
+    CREATE TABLE IF NOT EXISTS 对已存在的表不会加新列，所以旧库（建表时
+    还没有 user_id）需要单独 ALTER。存量数据统一归到匿名用户，避免数据丢失；
+    新写入的数据才会带上真实 user_id。
+    """
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(children)").fetchall()}
+    if "user_id" not in cols:
+        conn.execute(
+            "ALTER TABLE children ADD COLUMN user_id TEXT NOT NULL DEFAULT 'user_anonymous'"
+        )
+        conn.commit()
 
 
 # ---------------------------------------------------------------
@@ -135,11 +152,13 @@ def _fetch_child_records(conn: sqlite3.Connection, child_id: str) -> list[Growth
 # 宝宝档案 CRUD
 # ===============================================================
 
-def list_children() -> list[ChildSummary]:
-    """列出所有宝宝（轻量投影，按最近记录日期降序）"""
+def list_children(user_id: str) -> list[ChildSummary]:
+    """列出当前用户的所有宝宝（轻量投影，按最近记录日期降序）"""
     conn = _connect()
     try:
-        rows = conn.execute("SELECT * FROM children").fetchall()
+        rows = conn.execute(
+            "SELECT * FROM children WHERE user_id = ?", (user_id,)
+        ).fetchall()
         summaries = []
         for row in rows:
             # 聚合统计：记录数 + 最近记录日期（无需读出全部记录）
@@ -164,12 +183,13 @@ def list_children() -> list[ChildSummary]:
         conn.close()
 
 
-def get_child(child_id: str) -> Optional[Child]:
-    """按 ID 取单个宝宝（含全部记录）"""
+def get_child(user_id: str, child_id: str) -> Optional[Child]:
+    """按 ID 取单个宝宝（含全部记录），仅限当前用户所有"""
     conn = _connect()
     try:
         row = conn.execute(
-            "SELECT * FROM children WHERE child_id = ?", (child_id,)
+            "SELECT * FROM children WHERE child_id = ? AND user_id = ?",
+            (child_id, user_id),
         ).fetchone()
         if row is None:
             return None
@@ -178,16 +198,16 @@ def get_child(child_id: str) -> Optional[Child]:
         conn.close()
 
 
-def create_child(data: CreateChild) -> Child:
-    """新建宝宝档案（空记录）"""
+def create_child(user_id: str, data: CreateChild) -> Child:
+    """新建宝宝档案（空记录），归属当前用户"""
     conn = _connect()
     try:
         now = _now()
         child_id = f"c_{uuid.uuid4().hex[:8]}"
         conn.execute(
-            "INSERT INTO children (child_id, name, birth_date, gender, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (child_id, data.name, data.birthDate, data.gender, now, now),
+            "INSERT INTO children (child_id, user_id, name, birth_date, gender, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (child_id, user_id, data.name, data.birthDate, data.gender, now, now),
         )
         conn.commit()
         return Child(
@@ -203,12 +223,13 @@ def create_child(data: CreateChild) -> Child:
         conn.close()
 
 
-def update_child(child_id: str, data: UpdateChild) -> Optional[Child]:
-    """部分更新宝宝档案（只更新传入字段）"""
+def update_child(user_id: str, child_id: str, data: UpdateChild) -> Optional[Child]:
+    """部分更新宝宝档案（只更新传入字段），仅限当前用户所有"""
     conn = _connect()
     try:
         row = conn.execute(
-            "SELECT * FROM children WHERE child_id = ?", (child_id,)
+            "SELECT * FROM children WHERE child_id = ? AND user_id = ?",
+            (child_id, user_id),
         ).fetchone()
         if row is None:
             return None
@@ -222,23 +243,27 @@ def update_child(child_id: str, data: UpdateChild) -> Optional[Child]:
             updates["gender"] = data.gender
 
         set_clause = ", ".join(f"{k} = ?" for k in updates)
-        values = list(updates.values()) + [child_id]
-        conn.execute(f"UPDATE children SET {set_clause} WHERE child_id = ?", values)
+        values = list(updates.values()) + [child_id, user_id]
+        conn.execute(f"UPDATE children SET {set_clause} WHERE child_id = ? AND user_id = ?", values)
         conn.commit()
 
         row = conn.execute(
-            "SELECT * FROM children WHERE child_id = ?", (child_id,)
+            "SELECT * FROM children WHERE child_id = ? AND user_id = ?",
+            (child_id, user_id),
         ).fetchone()
         return _row_to_child(row, _fetch_child_records(conn, child_id))
     finally:
         conn.close()
 
 
-def delete_child(child_id: str) -> bool:
-    """删除宝宝（级联删除其所有记录）"""
+def delete_child(user_id: str, child_id: str) -> bool:
+    """删除宝宝（级联删除其所有记录），仅限当前用户所有"""
     conn = _connect()
     try:
-        cur = conn.execute("DELETE FROM children WHERE child_id = ?", (child_id,))
+        cur = conn.execute(
+            "DELETE FROM children WHERE child_id = ? AND user_id = ?",
+            (child_id, user_id),
+        )
         conn.commit()
         return cur.rowcount > 0
     finally:
@@ -249,12 +274,13 @@ def delete_child(child_id: str) -> bool:
 # 成长记录 CRUD
 # ===============================================================
 
-def add_record(child_id: str, data: CreateGrowthRecord) -> Optional[GrowthRecord]:
-    """给指定宝宝新增一条成长记录"""
+def add_record(user_id: str, child_id: str, data: CreateGrowthRecord) -> Optional[GrowthRecord]:
+    """给指定宝宝新增一条成长记录（宝宝必须属于当前用户）"""
     conn = _connect()
     try:
         exists = conn.execute(
-            "SELECT child_id FROM children WHERE child_id = ?", (child_id,)
+            "SELECT child_id FROM children WHERE child_id = ? AND user_id = ?",
+            (child_id, user_id),
         ).fetchone()
         if exists is None:
             return None
@@ -304,13 +330,17 @@ _RECORD_COLUMN_MAP = {
 
 
 def update_record(
-    child_id: str, record_id: str, data: UpdateGrowthRecord
+    user_id: str, child_id: str, record_id: str, data: UpdateGrowthRecord
 ) -> Optional[GrowthRecord]:
-    """部分更新成长记录（只更新显式传入的字段）"""
+    """部分更新成长记录（只更新显式传入的字段），记录必须属于当前用户的宝宝"""
     conn = _connect()
     try:
+        # JOIN children 校验归属：记录本身没有 user_id 列，靠 child 的 user_id 隔离
         exists = conn.execute(
-            "SELECT id FROM records WHERE id = ? AND child_id = ?", (record_id, child_id)
+            "SELECT r.id FROM records r "
+            "JOIN children c ON r.child_id = c.child_id "
+            "WHERE r.id = ? AND r.child_id = ? AND c.user_id = ?",
+            (record_id, child_id, user_id),
         ).fetchone()
         if exists is None:
             return None
@@ -342,12 +372,16 @@ def update_record(
         conn.close()
 
 
-def delete_record(child_id: str, record_id: str) -> bool:
-    """删除指定记录"""
+def delete_record(user_id: str, child_id: str, record_id: str) -> bool:
+    """删除指定记录（记录必须属于当前用户的宝宝）"""
     conn = _connect()
     try:
+        # 子查询限定 child_id 必须属于当前用户，防止越权删除他人记录
         cur = conn.execute(
-            "DELETE FROM records WHERE id = ? AND child_id = ?", (record_id, child_id)
+            "DELETE FROM records WHERE id = ? AND child_id IN ("
+            "  SELECT child_id FROM children WHERE child_id = ? AND user_id = ?"
+            ")",
+            (record_id, child_id, user_id),
         )
         conn.commit()
         return cur.rowcount > 0

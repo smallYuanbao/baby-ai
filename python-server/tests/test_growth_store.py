@@ -1,6 +1,8 @@
 """growth_store（SQLite 存储层）单元测试
 
-覆盖宝宝档案 + 成长记录的 CRUD、部分更新、外键级联删除、聚合统计。
+覆盖宝宝档案 + 成长记录的 CRUD、部分更新、外键级联删除、聚合统计，以及
+方案 A 的多租户隔离（不同 user_id 看不到彼此数据）。
+
 不依赖 ChromaDB / LLM —— 通过 monkeypatch 把 GROWTH_DB_PATH 指向临时文件。
 """
 
@@ -24,6 +26,10 @@ def db(monkeypatch, tmp_path):
     return db_path
 
 
+# 方案 A：所有存储操作都需要显式传入 user_id（当前登录用户）
+USER = "user_alice"
+
+
 def _child(name="小明", birth_date="2023-05-10", gender="male") -> CreateChild:
     return CreateChild(name=name, birthDate=birth_date, gender=gender)
 
@@ -37,10 +43,10 @@ def _record(date="2024-01-01", weight=10.5, height=75.0) -> CreateGrowthRecord:
 # ---------------------------------------------------------------
 
 def test_create_and_get_child(db):
-    created = growth_store.create_child(_child())
+    created = growth_store.create_child(USER, _child())
     assert created.childId.startswith("c_")
 
-    got = growth_store.get_child(created.childId)
+    got = growth_store.get_child(USER, created.childId)
     assert got is not None
     assert got.name == "小明"
     assert got.birthDate == "2023-05-10"
@@ -49,18 +55,18 @@ def test_create_and_get_child(db):
 
 
 def test_get_missing_child_returns_none(db):
-    assert growth_store.get_child("c_nonexistent") is None
+    assert growth_store.get_child(USER, "c_nonexistent") is None
 
 
 def test_list_children_with_stats(db):
     """list_children 返回轻量投影 + 聚合统计（recordCount / lastRecordDate）"""
-    c1 = growth_store.create_child(_child(name="大宝"))
-    c2 = growth_store.create_child(_child(name="二宝"))
+    c1 = growth_store.create_child(USER, _child(name="大宝"))
+    c2 = growth_store.create_child(USER, _child(name="二宝"))
 
-    growth_store.add_record(c1.childId, _record(date="2024-03-01", weight=8.0))
-    growth_store.add_record(c1.childId, _record(date="2024-06-01", weight=9.5))
+    growth_store.add_record(USER, c1.childId, _record(date="2024-03-01", weight=8.0))
+    growth_store.add_record(USER, c1.childId, _record(date="2024-06-01", weight=9.5))
 
-    summaries = growth_store.list_children()
+    summaries = growth_store.list_children(USER)
     by_id = {s.childId: s for s in summaries}
 
     assert by_id[c1.childId].recordCount == 2
@@ -73,8 +79,8 @@ def test_list_children_with_stats(db):
 
 
 def test_update_child_partial(db):
-    child = growth_store.create_child(_child())
-    updated = growth_store.update_child(child.childId, UpdateChild(name="小名"))
+    child = growth_store.create_child(USER, _child())
+    updated = growth_store.update_child(USER, child.childId, UpdateChild(name="小名"))
     assert updated.name == "小名"
     # 未传字段保持不变
     assert updated.birthDate == "2023-05-10"
@@ -82,12 +88,12 @@ def test_update_child_partial(db):
 
 
 def test_delete_child_cascades_records(db):
-    child = growth_store.create_child(_child())
-    growth_store.add_record(child.childId, _record())
+    child = growth_store.create_child(USER, _child())
+    growth_store.add_record(USER, child.childId, _record())
 
-    assert growth_store.delete_child(child.childId) is True
+    assert growth_store.delete_child(USER, child.childId) is True
     # 档案已删
-    assert growth_store.get_child(child.childId) is None
+    assert growth_store.get_child(USER, child.childId) is None
     # 记录应被外键级联删除（直接查 DB 验证）
     import sqlite3
     conn = sqlite3.connect(db)
@@ -103,9 +109,10 @@ def test_delete_child_cascades_records(db):
 # ---------------------------------------------------------------
 
 def test_add_record_with_feeding(db):
-    child = growth_store.create_child(_child())
+    child = growth_store.create_child(USER, _child())
     feeding = Feeding(type="breast", amount=120, unit="ml")
     rec = growth_store.add_record(
+        USER,
         child.childId,
         CreateGrowthRecord(date="2024-01-01", weight=10.0, feeding=feeding, diapers=6),
     )
@@ -113,30 +120,54 @@ def test_add_record_with_feeding(db):
     assert rec.feeding.type == "breast"
     assert rec.feeding.amount == 120
     # feeding 是嵌套对象，回读后仍能还原
-    got = growth_store.get_child(child.childId)
+    got = growth_store.get_child(USER, child.childId)
     assert got.records[0].feeding.unit == "ml"
 
 
 def test_add_record_to_missing_child(db):
-    assert growth_store.add_record("c_nope", _record()) is None
+    assert growth_store.add_record(USER, "c_nope", _record()) is None
 
 
 def test_update_record_partial(db):
-    child = growth_store.create_child(_child())
-    rec = growth_store.add_record(child.childId, _record(weight=10.0, height=75.0))
+    child = growth_store.create_child(USER, _child())
+    rec = growth_store.add_record(USER, child.childId, _record(weight=10.0, height=75.0))
 
     updated = growth_store.update_record(
-        child.childId, rec.id, UpdateGrowthRecord(weight=11.0)
+        USER, child.childId, rec.id, UpdateGrowthRecord(weight=11.0)
     )
     assert updated.weight == 11.0
     assert updated.height == 75.0  # 未传字段保持不变
 
 
 def test_delete_record(db):
-    child = growth_store.create_child(_child())
-    rec = growth_store.add_record(child.childId, _record())
+    child = growth_store.create_child(USER, _child())
+    rec = growth_store.add_record(USER, child.childId, _record())
 
-    assert growth_store.delete_record(child.childId, rec.id) is True
-    assert growth_store.delete_record(child.childId, rec.id) is False  # 二次删除返回 False
-    got = growth_store.get_child(child.childId)
+    assert growth_store.delete_record(USER, child.childId, rec.id) is True
+    assert growth_store.delete_record(USER, child.childId, rec.id) is False  # 二次删除返回 False
+    got = growth_store.get_child(USER, child.childId)
     assert got.records == []
+
+
+# ---------------------------------------------------------------
+# 多租户隔离（方案 A）
+# ---------------------------------------------------------------
+
+def test_multi_tenant_isolation(db):
+    """alice 建的档案，bob 既看不到、也改不了、更删不掉（IDOR 越权防护）"""
+    alice_child = growth_store.create_child("user_alice", _child(name="Alice的宝宝"))
+    growth_store.add_record("user_alice", alice_child.childId, _record(weight=8.0))
+
+    # 1. bob 的列表里没有 alice 的宝宝
+    assert growth_store.list_children("user_bob") == []
+
+    # 2. bob 按 ID 直接取 → None（拿不到他人数据）
+    assert growth_store.get_child("user_bob", alice_child.childId) is None
+
+    # 3. bob 尝试更新 / 删除 / 加记录 → 全部 None / False（越权被拦）
+    assert growth_store.update_child("user_bob", alice_child.childId, UpdateChild(name="篡改")) is None
+    assert growth_store.delete_child("user_bob", alice_child.childId) is False
+    assert growth_store.add_record("user_bob", alice_child.childId, _record()) is None
+
+    # 4. alice 自己的数据完好无损
+    assert growth_store.get_child("user_alice", alice_child.childId).name == "Alice的宝宝"

@@ -1,3 +1,5 @@
+from typing import Optional
+
 import jieba
 from rank_bm25 import BM25Okapi
 
@@ -42,19 +44,28 @@ def search_docs(query: str, top_k: int = 3) -> list[RAGDocument]:
     return all_docs[:top_k]
 
 
-def search_by_file(query: str, file_id: str, top_k: int = 5) -> list[RAGDocument]:
+def search_by_file(query: str, file_id: str, top_k: int = 5, user_id: Optional[str] = None) -> list[RAGDocument]:
     """按 file_id 检索用户上传的文档（文件上下文打通）。
 
     上传流程会把文件分块写入独立的 `rag_user_uploads` collection，
-    每块 metadata 带 `file_id`。这里用 ChromaDB 的 where 过滤，
+    每块 metadata 带 `file_id` + `user_id`。这里用 ChromaDB 的 where 过滤，
     只召回该文件内与 query 最相关的 chunks。
+
+    多租户隔离：where 同时限定 file_id 和 user_id，防止凭一个 file_id 猜出
+    并检索到他人上传的文件内容（IDOR 越权）。
     """
     query_embedding = get_embedding(query)
     coll = chroma_client.get_or_create_collection(name=CHROMA_USER_UPLOAD_COLLECTION)
+    # ChromaDB 多条件过滤必须用 $and 组合（不能直接并列多个 key）。
+    # 同时限定 file_id + user_id，防止凭 file_id 越权检索他人文件。
+    if user_id:
+        where: dict = {"$and": [{"file_id": file_id}, {"user_id": user_id}]}
+    else:
+        where = {"file_id": file_id}
     results = coll.query(
         query_embeddings=[query_embedding],
         n_results=top_k,
-        where={"file_id": file_id},
+        where=where,
         include=["documents", "distances", "metadatas"],
     )
     ids = results.get("ids", [[]])[0]

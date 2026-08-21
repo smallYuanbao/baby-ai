@@ -2,24 +2,41 @@
  * Header — App shell top bar.
  *
  * Renders the global site header with the app logo (a teddy-bear SVG mascot),
- * app title, and a subtitle. It is a pure presentational component with no
- * local state, side effects, or props — the content is static branding.
- *
- * Layout role: sits at the top of the main app layout, above the sidebar /
- * content area. It uses `flex-shrink: 0` so it never collapses when the
- * viewport is short.
+ * app title, and a subtitle. On the right edge it hosts a user switcher
+ * (方案 A 轻量鉴权 demo)：切换 API Key 即切换「当前登录用户」，用于演示
+ * 服务端多租户隔离——不同用户看不到彼此的宝宝档案 / 上传文件。
  */
 
+import { useState } from 'react';
+import { getCurrentUserKey, setApiKey } from '../../services/api';
 import styles from './Header.module.less';
 
 /**
- * App header — branding bar with logo and copy.
- *
- * This component has no props (it renders static content), so there is no
- * props interface to document. If the title or subtitle are made configurable
- * in the future, they should be added as props on a new `HeaderProps` type.
+ * 预置用户，与后端 `app/core/auth.py` 的 API_KEYS 一一对应。
+ * 每个 key 映射到一个 user_id；切换 key 后所有请求带上新 key，
+ * 服务端据此过滤数据，从而演示隔离效果。
+ */
+const USERS: { key: string; label: string }[] = [
+  { key: 'dev-key-alice', label: '👩 Alice' },
+  { key: 'dev-key-bob', label: '👨 Bob' },
+];
+
+/**
+ * App header — branding bar with logo, copy, and a user switcher.
  */
 export function Header() {
+  const [currentKey, setCurrentKey] = useState(getCurrentUserKey());
+
+  /**
+   * 切换登录用户：更新 api 层的 key 并刷新页面，
+   * 让各容器重新以新身份拉取数据（隔离边界在服务端）。
+   */
+  const handleSwitch = (key: string) => {
+    setApiKey(key);
+    setCurrentKey(key);
+    window.location.reload();
+  };
+
   return (
     <header className={styles.header}>
       <div className={styles.container}>
@@ -50,6 +67,19 @@ export function Header() {
           <h1 className={styles.title}>育儿AI助手</h1>
           <p className={styles.subtitle}>用科学知识陪伴宝宝成长 🧸</p>
         </div>
+        {/* 用户切换：方案 A 轻量鉴权 demo 的入口 */}
+        <select
+          className={styles.userSwitcher}
+          value={currentKey}
+          onChange={(e) => handleSwitch(e.target.value)}
+          aria-label="切换登录用户"
+        >
+          {USERS.map((u) => (
+            <option key={u.key} value={u.key}>
+              {u.label}
+            </option>
+          ))}
+        </select>
       </div>
     </header>
   );

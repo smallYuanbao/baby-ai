@@ -45,4 +45,14 @@ export const config = {
    * @example "/api" (local dev fallback — proxied by Vite)
    */
   apiBaseUrl: import.meta.env.VITE_API_BASE_URL || '/api',
+
+  /**
+   * @description 默认 API Key（对应后端 app/core/auth.py 里 API_KEYS 的预置 key）。
+   *              用于方案 A 的轻量鉴权 + 多租户隔离：不同 key 对应不同 user_id，
+   *              各自只能看到自己建的宝宝档案 / 上传的文件。
+   *
+   *              前端实际使用的 key 由 services/api.ts 管理（可用 setApiKey 切换，
+   *              持久化到 localStorage）；这里只提供未切换时的默认值。
+   */
+  apiKey: import.meta.env.VITE_API_KEY || 'dev-key-alice',
 };

@@ -16,6 +16,49 @@
 import { config } from '../config';
 
 /**
+ * 当前登录用户的 API Key（方案 A 轻量鉴权 + 多租户隔离）。
+ *
+ * 后端 `app/core/auth.py` 通过 `Authorization: Bearer <key>` 解析出 user_id，
+ * 各存储层再按 user_id 过滤数据。key 持久化在 localStorage，切换用户后
+ * 下一次请求即生效（隔离边界在服务端，前端只是替用户带上「身份凭证」）。
+ */
+const API_KEY_STORAGE = 'baby-ai-api-key';
+
+let currentApiKey: string =
+  (typeof localStorage !== 'undefined' && localStorage.getItem(API_KEY_STORAGE)) ||
+  config.apiKey;
+
+/**
+ * 返回当前登录用户的 API Key（供 UI 展示当前身份）。
+ *
+ * @returns 当前生效的 API Key（如 `"dev-key-alice"`）。
+ */
+export function getCurrentUserKey(): string {
+  return currentApiKey;
+}
+
+/**
+ * 切换登录用户并持久化到 localStorage。
+ *
+ * @param key - 新的 API Key（对应后端 API_KEYS 的键）。
+ * @returns 切换后的 key。
+ */
+export function setApiKey(key: string): string {
+  currentApiKey = key;
+  localStorage.setItem(API_KEY_STORAGE, key);
+  return key;
+}
+
+/**
+ * 生成统一的鉴权请求头，供所有 fetch 调用注入。
+ *
+ * @returns `{ Authorization: "Bearer <key>" }` 头对象。
+ */
+function authHeaders(): Record<string, string> {
+  return { Authorization: `Bearer ${currentApiKey}` };
+}
+
+/**
  * Custom error thrown when an API response carries a non-OK status.
  *
  * Normalises HTTP errors so callers can handle them uniformly without
@@ -58,6 +101,8 @@ async function request<T>(
   const response = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
+      // 统一注入鉴权头（方案 A），让后端解析出 user_id。
+      ...authHeaders(),
       // Spread caller-supplied headers last so they can override
       // the default Content-Type when needed (e.g. for form uploads).
       ...options.headers,
@@ -118,6 +163,8 @@ async function uploadFile<T>(file: File): Promise<T> {
 
   const response = await fetch(url, {
     method: 'POST',
+    // 只带鉴权头，不设 Content-Type —— 浏览器会自动补 multipart/form-data 的 boundary。
+    headers: authHeaders(),
     body: formData,
   });
 
@@ -163,7 +210,7 @@ async function chatSSE(
   // via response.body.getReader() — we intentionally skip .json() here.
   return fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ message, history, session_id: sessionId, file_id: fileId }),
   });
 }
@@ -275,7 +322,7 @@ export const api = {
     requestAnalysis: (childId: string) =>
       fetch(`${config.apiBaseUrl}/growth/children/${childId}/analysis`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
       }),
   },
 
@@ -292,7 +339,7 @@ export const api = {
     requestStory: (childAge: number, interest?: string, storyType?: string) =>
       fetch(`${config.apiBaseUrl}/play/story`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ childAge, interest, storyType }),
       }),
 

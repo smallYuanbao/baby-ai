@@ -357,12 +357,14 @@ def _split_by_sentence(text: str, chunk_size: int, overlap: int) -> list[str]:
 # 4. 主流程
 # ============================================================
 
-def process_upload(file: UploadFile):
+def process_upload(file: UploadFile, user_id: str):
     """
     处理上传文件的完整流程：存盘 → 解析 → 清洗 → 分块 → 向量化 → 入库。
 
     Args:
-        file: FastAPI UploadFile 对象（来自 POST /api/upload）
+        file:    FastAPI UploadFile 对象（来自 POST /api/upload）
+        user_id: 上传者（来自鉴权 dependency），写入每个 chunk 的 metadata，
+                 检索时按 user_id + file_id 双重过滤，实现文件级多租户隔离
 
     Returns:
         {"message": "上传成功", "file_id": "a3f2b8c1", "chunks_count": 12}
@@ -421,6 +423,7 @@ def process_upload(file: UploadFile):
             metadatas=[{
                 "source": "user_upload",
                 "file_id": file_id,
+                "user_id": user_id,
                 "filename": file.filename,
                 "chunk_index": i,
             }],

@@ -14,9 +14,10 @@
 import json
 from datetime import datetime
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from app.core.auth import get_current_user_id
 from app.models.chat import ChatMessage
 from app.models.growth import (
     CreateChild,
@@ -40,34 +41,34 @@ def _not_found(message: str) -> JSONResponse:
 # ===============================================================
 
 @router.get("/children")
-def list_children():
-    return growth_store.list_children()
+def list_children(user_id: str = Depends(get_current_user_id)):
+    return growth_store.list_children(user_id)
 
 
 @router.get("/children/{child_id}")
-def get_child(child_id: str):
-    child = growth_store.get_child(child_id)
+def get_child(child_id: str, user_id: str = Depends(get_current_user_id)):
+    child = growth_store.get_child(user_id, child_id)
     if child is None:
         return _not_found("宝宝档案不存在")
     return child
 
 
 @router.post("/children", status_code=201)
-def create_child(data: CreateChild):
-    return growth_store.create_child(data)
+def create_child(data: CreateChild, user_id: str = Depends(get_current_user_id)):
+    return growth_store.create_child(user_id, data)
 
 
 @router.put("/children/{child_id}")
-def update_child(child_id: str, data: UpdateChild):
-    child = growth_store.update_child(child_id, data)
+def update_child(child_id: str, data: UpdateChild, user_id: str = Depends(get_current_user_id)):
+    child = growth_store.update_child(user_id, child_id, data)
     if child is None:
         return _not_found("宝宝档案不存在")
     return child
 
 
 @router.delete("/children/{child_id}")
-def delete_child(child_id: str):
-    ok = growth_store.delete_child(child_id)
+def delete_child(child_id: str, user_id: str = Depends(get_current_user_id)):
+    ok = growth_store.delete_child(user_id, child_id)
     if not ok:
         return _not_found("宝宝档案不存在")
     return {"success": True}
@@ -78,24 +79,24 @@ def delete_child(child_id: str):
 # ===============================================================
 
 @router.post("/children/{child_id}/records", status_code=201)
-def add_record(child_id: str, data: CreateGrowthRecord):
-    record = growth_store.add_record(child_id, data)
+def add_record(child_id: str, data: CreateGrowthRecord, user_id: str = Depends(get_current_user_id)):
+    record = growth_store.add_record(user_id, child_id, data)
     if record is None:
         return _not_found("宝宝档案不存在")
     return record
 
 
 @router.put("/children/{child_id}/records/{record_id}")
-def update_record(child_id: str, record_id: str, data: UpdateGrowthRecord):
-    record = growth_store.update_record(child_id, record_id, data)
+def update_record(child_id: str, record_id: str, data: UpdateGrowthRecord, user_id: str = Depends(get_current_user_id)):
+    record = growth_store.update_record(user_id, child_id, record_id, data)
     if record is None:
         return _not_found("记录不存在")
     return record
 
 
 @router.delete("/children/{child_id}/records/{record_id}")
-def delete_record(child_id: str, record_id: str):
-    ok = growth_store.delete_record(child_id, record_id)
+def delete_record(child_id: str, record_id: str, user_id: str = Depends(get_current_user_id)):
+    ok = growth_store.delete_record(user_id, child_id, record_id)
     if not ok:
         return _not_found("记录不存在")
     return {"success": True}
@@ -106,8 +107,8 @@ def delete_record(child_id: str, record_id: str):
 # ===============================================================
 
 @router.get("/children/{child_id}/chart-data")
-def chart_data(child_id: str, metric: str = "weight"):
-    child = growth_store.get_child(child_id)
+def chart_data(child_id: str, metric: str = "weight", user_id: str = Depends(get_current_user_id)):
+    child = growth_store.get_child(user_id, child_id)
     if child is None:
         return _not_found("宝宝档案不存在")
 
@@ -147,8 +148,8 @@ ANALYSIS_PROMPT = """你是一位资深的儿科医生和儿童发育专家。�
 
 
 @router.post("/children/{child_id}/analysis")
-async def analysis(child_id: str, request: Request):
-    child = growth_store.get_child(child_id)
+async def analysis(child_id: str, request: Request, user_id: str = Depends(get_current_user_id)):
+    child = growth_store.get_child(user_id, child_id)
     if child is None:
         return _not_found("宝宝档案不存在")
     if not child.records:

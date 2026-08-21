@@ -74,6 +74,7 @@ def get_rag_context(
     user_message: str,
     session_id: str,
     client_history: list[ChatHistoryEntry],
+    user_id: str,
     file_id: Optional[str] = None,
 ) -> tuple[list[ChatMessage], list[Reference], str, bool]:
     """
@@ -87,7 +88,7 @@ def get_rag_context(
     """
 
     # 1. 取服务端历史（如果客户端没传，用服务端的）
-    server_history = get_history(session_id)
+    server_history = get_history(user_id, session_id)
     history = client_history if client_history else server_history
 
     # 2. 改写
@@ -137,7 +138,7 @@ def get_rag_context(
 
         # 文件上下文：用户上传了文件，额外检索该文件内容，排在最前（优先展示 + 优先喂给 LLM）
         if file_id:
-            file_docs = search_by_file(message, file_id, top_k=5)
+            file_docs = search_by_file(message, file_id, top_k=5, user_id=user_id)
             if file_docs:
                 file_refs = [Reference(id=d.id or "", text=d.text) for d in file_docs]
                 references = file_refs + references
@@ -154,11 +155,12 @@ def execute_rag_pipeline(
     user_message: str,
     session_id: str,
     client_history: list[ChatHistoryEntry],
+    user_id: str,
     file_id: Optional[str] = None,
 ) -> dict:
     """非流式 RAG 管道"""
     messages, references, cache_key, can_cache_answer = get_rag_context(
-        user_message, session_id, client_history, file_id,
+        user_message, session_id, client_history, user_id, file_id,
     )
 
     # 答案缓存：仅无历史（FAQ）时启用，命中则跳过 LLM 调用
@@ -170,9 +172,9 @@ def execute_rag_pipeline(
     else:
         logger.info("[缓存] 答案命中: %s", cache_key)
 
-    # 更新服务端历史
-    add_user_message(session_id, user_message)
-    add_assitant_message(session_id, answer)
+    # 更新服务端历史（按 user_id 隔离）
+    add_user_message(user_id, session_id, user_message)
+    add_assitant_message(user_id, session_id, answer)
 
     return {"answer": answer, "references": references}
 
@@ -182,11 +184,12 @@ async def execute_rag_stream(
     session_id: str,
     client_history: list[ChatHistoryEntry],
     request: Request,
+    user_id: str,
     file_id: Optional[str] = None,
 ):
     """流式 RAG 管道（异步生成器）"""
     messages, references, _cache_key, _can_cache_answer = get_rag_context(
-        user_message, session_id, client_history, file_id,
+        user_message, session_id, client_history, user_id, file_id,
     )
 
     refs_json = json.dumps(
@@ -202,4 +205,4 @@ async def execute_rag_stream(
 
     yield f"event: done\ndata: {{}}\n\n"
 
-    add_user_message(session_id, user_message)
+    add_user_message(user_id, session_id, user_message)

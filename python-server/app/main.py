@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, File, UploadFile
+from fastapi import FastAPI, Request, File, UploadFile, Depends
 from datetime import datetime as Datetime
 from datetime import timezone
 
@@ -8,6 +8,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
+from app.core.auth import get_current_user_id
 from app.models.chat import ChatRequest, ChatResponse
 from app.services.chat_service import execute_rag_pipeline, execute_rag_stream
 from app.services.agent import MCPClient, agent_chat, agent_chat_mcp, mutil_agent_pipeline, react_agent_chat, react_agent_with_reflection, unified_agent
@@ -45,8 +46,8 @@ async def health_check():
 # 文件上传：解析 → 清洗 → 分块 → 向量化 → 入库 ChromaDB（供 RAG 检索）
 # 返回前端契约（驼峰字段），对齐 client 的 UploadResponse 类型
 @app.post("/api/upload")
-async def upload_file(file: UploadFile = File(...)):
-    result = process_upload(file)
+async def upload_file(file: UploadFile = File(...), user_id: str = Depends(get_current_user_id)):
+    result = process_upload(file, user_id)
     return {
         "fileId": result["file_id"],
         "originalName": file.filename,
@@ -59,20 +60,21 @@ async def upload_file(file: UploadFile = File(...)):
 # 非流式输出
 @app.post("/api/chat")
 @limiter.limit("10/minute")
-def chat(payload: ChatRequest, request: Request) -> ChatResponse:
-    result = execute_rag_pipeline(payload.message, payload.session_id, payload.history, payload.file_id)
+def chat(payload: ChatRequest, request: Request, user_id: str = Depends(get_current_user_id)) -> ChatResponse:
+    result = execute_rag_pipeline(payload.message, payload.session_id, payload.history, user_id, payload.file_id)
     return ChatResponse(answer=result["answer"], references=result["references"])
 
 
 @app.post("/api/chat/stream")
 @limiter.limit("10/minute")
-async def chat_stream(chat_req: ChatRequest, request: Request):       # ← 多一个参数
+async def chat_stream(chat_req: ChatRequest, request: Request, user_id: str = Depends(get_current_user_id)):       # ← 多一个参数
     return StreamingResponse(
         execute_rag_stream(
             chat_req.message,
             chat_req.session_id,
             chat_req.history,
             request,
+            user_id,
             chat_req.file_id,
         ),
         media_type="text/event-stream",

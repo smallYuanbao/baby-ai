@@ -96,3 +96,26 @@
   font-size: @text-xs;       // 12px — intentionally small so it doesn't compete with the title
   color: @gray-400;          // muted gray for secondary hierarchy
 }
+
+// ------------------------------------------------------------------
+//  User switcher
+// ------------------------------------------------------------------
+//  Right-aligned select for the 方案 A 轻量鉴权 demo — 切换当前登录用户
+//  （alice / bob）以演示服务端多租户隔离。margin-left: auto 把它推到
+//  header 最右侧，与左侧的 logo + 标题形成两端布局。
+// ------------------------------------------------------------------
+.userSwitcher {
+  margin-left: auto;              // push to the far right of the header bar
+  font-size: @text-xs;            // 12px — compact, secondary to the title
+  padding: @space-1d5 @space-3;   // 6px vertical, 12px horizontal
+  border: 1px solid @primary-200; // light orange border ties into brand
+  border-radius: @radius-xl;      // 16px — matches input/button convention
+  background: @white;
+  color: @gray-700;
+  cursor: pointer;
+  outline: none;
+
+  &:focus {
+    border-color: @primary-400;   // deepen border on focus for affordance
+  }
+}
