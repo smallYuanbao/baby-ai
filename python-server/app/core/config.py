@@ -51,3 +51,7 @@ RAG_CACHE_MAXSIZE = int(os.getenv("RAG_CACHE_MAXSIZE", "512"))
 # ---------- growth 成长记录存储（SQLite） ----------
 # 宝宝档案 + 成长记录的持久化路径（SQLite 单文件，替代原 Express 的 JSON 文件方案）
 GROWTH_DB_PATH = os.getenv("GROWTH_DB_PATH", "data/growth.db")
+
+# ---------- 会话历史存储（SQLite） ----------
+# 对话历史的持久化路径（从内存 dict 落盘，服务重启不丢）
+SESSION_DB_PATH = os.getenv("SESSION_DB_PATH", "data/sessions.db")
