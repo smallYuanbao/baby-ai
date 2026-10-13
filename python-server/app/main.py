@@ -1,4 +1,6 @@
+import subprocess
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI, Request, File, UploadFile, Depends
 from datetime import datetime as Datetime
 from datetime import timezone
@@ -40,6 +42,67 @@ async def health_check():
         "status": "ok",
         "uptime": round((Datetime.now() - start_time).total_seconds(), 2),
         "timestamp": utc_now.isoformat(),
+    }
+
+
+def _git_commit() -> str | None:
+    """当前代码版本(短 commit)。取不到返回 None——不编假值。
+
+    为什么重要:检索参数(top_k / alpha / RRF 的 k)是硬编码在函数签名里的,不读 env,
+    所以「代码版本」才是检索行为的主要标识。
+    """
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=Path(__file__).resolve().parents[2],  # 仓库根
+            capture_output=True, text=True, timeout=2,
+        )
+        return out.stdout.strip() or None if out.returncode == 0 else None
+    except Exception:
+        return None  # 没装 git / 非 git 目录 → 显式 None
+
+
+def _collection_counts() -> dict:
+    """各知识库集合的文档数(数据状态)。集合不存在记 None,整体失败也记 None。"""
+    from app.core.config import CHROMA_USER_UPLOAD_COLLECTION, COLLECTION_NAME, SEARCH_COLLECTIONS
+    from app.services.rag.embedding import chroma_client
+
+    counts: dict = {}
+    for name in [COLLECTION_NAME, *SEARCH_COLLECTIONS, CHROMA_USER_UPLOAD_COLLECTION]:
+        try:
+            counts[name] = chroma_client.get_collection(name).count()
+        except Exception:
+            counts[name] = None  # 集合不存在
+    return counts
+
+
+@app.get("/api/meta")
+def meta():
+    """被测系统状态(EvalFlow 评测平台用):暴露自身版本与配置,让「这次比上次好」可追溯。
+
+    没有这个接口,EvalFlow 只能记到自己那半边——run 之间分数变了也说不清是「改了检索」
+    还是「知识库/模型变了」,「回归」就只是一句话而不是结论。
+
+    只读、不含密钥。拿不到的字段显式给 None（并附 *_error），**不用空值假装已知**——
+    静默记空比不记更危险:会让人误信这次结果可与历史对比。
+    """
+    from app.core.config import DEEPSEEK_MODEL, OLLAMA_MODEL, QUERY_REWRITE_ENABLED, RERANKER_URL
+
+    try:
+        collections = _collection_counts()
+        collections_error = None
+    except Exception as e:
+        collections, collections_error = None, f"{type(e).__name__}: {e}"
+
+    return {
+        "service": "baby-ai",
+        "commit": _git_commit(),
+        "model": DEEPSEEK_MODEL,
+        "embed_model": OLLAMA_MODEL,
+        "query_rewrite": QUERY_REWRITE_ENABLED,
+        "reranker_url": RERANKER_URL,
+        "collections": collections,
+        "collections_error": collections_error,
     }
 
 
