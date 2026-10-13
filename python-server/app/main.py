@@ -1,7 +1,7 @@
 import subprocess
 from contextlib import asynccontextmanager
 from pathlib import Path
-from fastapi import FastAPI, Request, File, UploadFile, Depends
+from fastapi import FastAPI, Request, File, UploadFile, Depends, HTTPException
 from datetime import datetime as Datetime
 from datetime import timezone
 
@@ -10,7 +10,8 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from app.core.auth import get_current_user_id
+from app.core.auth import ANONYMOUS_USER, get_current_user_id
+from app.core.config import CHAT_RATE_LIMIT
 from app.models.chat import ChatRequest, ChatResponse
 from app.services.chat_service import execute_rag_pipeline, execute_rag_stream
 from app.services.agent import MCPClient, agent_chat, agent_chat_mcp, mutil_agent_pipeline, react_agent_chat, react_agent_with_reflection, unified_agent
@@ -24,8 +25,26 @@ mcp_client = None
 
 app = FastAPI()
 
-# 限流中间件：基于客户端 IP，超限返回 429（对应高并发-题5 恶意请求限流）
-limiter = Limiter(key_func=get_remote_address)
+def _rate_limit_key(request: Request) -> str:
+    """限流分桶的键:**按用户,不按 IP**。
+
+    按 IP 会误伤:公司/学校 NAT 后的多个用户共用一个出口 IP、互相抢额度;
+    本地开发时全是 127.0.0.1,整台机器共用一个桶。既然已经用 user_id 做了多租户隔离,
+    限流就该跟上这个维度——否则隔离做了、限额没做,一半一半。
+
+    匿名请求退回按 IP 分桶:不然所有匿名用户挤同一个桶,一个人刷就把别人挡了。
+    凭据无效的交给鉴权层返回 401,这里只管分桶,不重复判。
+    """
+    try:
+        uid = get_current_user_id(request.headers.get("authorization"))
+    except HTTPException:
+        uid = ANONYMOUS_USER
+    return uid if uid != ANONYMOUS_USER else f"ip:{get_remote_address(request)}"
+
+
+# 限流中间件:超限返回 429(对应高并发-题5 恶意请求限流)
+# 额度走配置(CHAT_RATE_LIMIT),本地/评测环境可调宽,不改代码。
+limiter = Limiter(key_func=_rate_limit_key)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -122,14 +141,14 @@ async def upload_file(file: UploadFile = File(...), user_id: str = Depends(get_c
 
 # 非流式输出
 @app.post("/api/chat")
-@limiter.limit("10/minute")
+@limiter.limit(CHAT_RATE_LIMIT)
 def chat(payload: ChatRequest, request: Request, user_id: str = Depends(get_current_user_id)) -> ChatResponse:
     result = execute_rag_pipeline(payload.message, payload.session_id, payload.history, user_id, payload.file_id)
     return ChatResponse(answer=result["answer"], references=result["references"])
 
 
 @app.post("/api/chat/stream")
-@limiter.limit("10/minute")
+@limiter.limit(CHAT_RATE_LIMIT)
 async def chat_stream(chat_req: ChatRequest, request: Request, user_id: str = Depends(get_current_user_id)):       # ← 多一个参数
     return StreamingResponse(
         execute_rag_stream(

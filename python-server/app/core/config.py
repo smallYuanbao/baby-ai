@@ -55,3 +55,8 @@ GROWTH_DB_PATH = os.getenv("GROWTH_DB_PATH", "data/growth.db")
 # ---------- 会话历史存储（SQLite） ----------
 # 对话历史的持久化路径（从内存 dict 落盘，服务重启不丢）
 SESSION_DB_PATH = os.getenv("SESSION_DB_PATH", "data/sessions.db")
+
+# ---------- 接口限流 ----------
+# 聊天端点的限流额度。**维度按用户(不是 IP)**，见 main.py 的 _rate_limit_key。
+# 抽成配置是为了能按环境调：本地/评测可以调宽，线上保持默认。
+CHAT_RATE_LIMIT = os.getenv("CHAT_RATE_LIMIT", "10/minute")
