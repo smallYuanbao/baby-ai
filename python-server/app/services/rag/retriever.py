@@ -6,6 +6,7 @@ from rank_bm25 import BM25Okapi
 from app.core.config import SEARCH_COLLECTIONS, CHROMA_USER_UPLOAD_COLLECTION
 from app.models.chat import RAGDocument
 from app.services.rag.embedding import get_embedding, chroma_client
+import threading
 
 
 # ============================================================
@@ -91,33 +92,46 @@ _bm25_model = None
 _bm25_docs = []
 _bm25_ids = []
 _bm25_metadata = []
+# 懒加载的锁:BM25 初始化要几秒(jieba 分词 + 遍历几千条文档)。并发请求同时进来时,
+# 若都看到 _bm25_model is None,就会各自跑一遍 _init_bm25 —— 一个线程正在重建 _bm25_ids,
+# 另一个已经在用它索引,于是 IndexError: list index out of range。
+# 症状:服务刚起、多个请求同时到达时,整批请求 500;单个请求或错开时序则正常。
+_bm25_lock = threading.Lock()
 
 
 def _init_bm25():
-    """从 ChromaDB 加载所有文档，初始化 BM25 模型（服务启动时调用一次）"""
+    """从 ChromaDB 加载所有文档，初始化 BM25 模型（首次检索时懒加载）。
+
+    并发安全:整个重建过程持锁,且**入口二次检查**——若别的线程已经初始化好就直接返回。
+    没有这道锁,并发请求会各自重建一次,把 _bm25_ids 重置成半成品,导致正在索引它的
+    线程 IndexError（见 _bm25_lock 处的说明）。
+    """
     global _bm25_corpus, _bm25_model, _bm25_docs, _bm25_ids, _bm25_metadata
-    _bm25_docs = []
-    _bm25_ids = []
-    _bm25_metadata = []
+    with _bm25_lock:
+        if _bm25_model is not None:  # 已有别的线程初始化完成,直接用
+            return
+        _bm25_docs = []
+        _bm25_ids = []
+        _bm25_metadata = []
 
-    for coll_name in SEARCH_COLLECTIONS:
-        coll = chroma_client.get_or_create_collection(name=coll_name.strip())
-        results = coll.get(include=["documents", "metadatas"])
-        docs = results.get("documents", [])
-        ids = results.get("ids", [])
-        metadatas = results.get("metadatas", [])
+        for coll_name in SEARCH_COLLECTIONS:
+            coll = chroma_client.get_or_create_collection(name=coll_name.strip())
+            results = coll.get(include=["documents", "metadatas"])
+            docs = results.get("documents", [])
+            ids = results.get("ids", [])
+            metadatas = results.get("metadatas", [])
 
-        _bm25_docs.extend(docs)
-        _bm25_ids.extend(ids)
-        _bm25_metadata.extend(metadatas if metadatas else [None] * len(docs))
+            _bm25_docs.extend(docs)
+            _bm25_ids.extend(ids)
+            _bm25_metadata.extend(metadatas if metadatas else [None] * len(docs))
 
-    if _bm25_docs:
-        _bm25_corpus = []
-        for doc in _bm25_docs:
-            tokens = list(jieba.cut(doc))
-            _bm25_corpus.append(tokens)
+        if _bm25_docs:
+            _bm25_corpus = []
+            for doc in _bm25_docs:
+                tokens = list(jieba.cut(doc))
+                _bm25_corpus.append(tokens)
 
-        _bm25_model = BM25Okapi(_bm25_corpus)
+            _bm25_model = BM25Okapi(_bm25_corpus)
 
 
 def sparse_search(query: str, top_k: int = 10) -> list[RAGDocument]:
