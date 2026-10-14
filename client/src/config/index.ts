@@ -16,7 +16,7 @@
  *   source tree.
  *
  * Usage:
- *   import { config } from '@/config';
+ *   import { config } from '../config';   // 相对路径引用；项目未配置 `@/` 别名
  *   const resp = await fetch(`${config.apiBaseUrl}/health`);
  *
  * @module config
