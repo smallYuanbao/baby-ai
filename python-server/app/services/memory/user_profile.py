@@ -1,7 +1,7 @@
 import json
 
 from app.services.rag import chroma_client
-from app.services.llm import DEFAULT_MAX_TOKENS, deepseek_client
+from app.services.llm import DEFAULT_MAX_TOKENS, create_completion
 from app.utils.logger import logger
 
 PROFILE_COLLECTION = "user_profiles"
@@ -37,7 +37,7 @@ def extract_profile(user_message: str, assistant_answer: str) -> dict:
 
 JSON："""
 
-    resp = deepseek_client.chat.completions.create(
+    resp = create_completion(
         model="deepseek-v4-flash",
         messages=[{"role": "user", "content": prompt}],
         temperature=0,

@@ -15,6 +15,24 @@ from app.core.cost_tracker import cost_tracker
 from app.utils.logger import logger
 
 # 初始化 DeepSeek 客户端（加 timeout，防止无限等待）
+def create_completion(**kwargs):
+    """**统一的 completions.create 出口**(带 token/成本统计)。
+
+    Agent 与记忆路径原来直接调 `deepseek_client.chat.completions.create`,
+    **绕开了 cost_tracker** —— 结果是那些路径烧的钱一笔都没记上,
+    账目严重低估。这和 max_tokens 漏 Agent 路径是**同一个根因:绕开公共出口**。
+
+    新代码一律走这里;直接调 deepseek_client 的地方都需要一个理由。
+    """
+    r = deepseek_client.chat.completions.create(**kwargs)
+    if getattr(r, "usage", None):
+        cost_tracker.record(
+            prompt_tokens=r.usage.prompt_tokens,
+            completion_tokens=r.usage.completion_tokens,
+        )
+    return r
+
+
 deepseek_client = OpenAI(
     api_key=DEEPSEEK_API_KEY,
     base_url=DEEPSEEK_BASE_URL,

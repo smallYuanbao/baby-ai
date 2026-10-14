@@ -4,7 +4,7 @@ from typing import Optional
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from app.services.llm import call_deepseek, deepseek_client
+from app.services.llm import call_deepseek, create_completion
 from app.services.tools import get_weather, WEATHER_TOOL
 from app.models.chat import ChatHistoryEntry, ChatMessage, Reference
 from app.services.chat_service import _build_messages
@@ -189,7 +189,7 @@ def agent_chat_mcp(user_message: str, mcp_client: MCPClient) -> str:
     # 2. 第一次调 LLM：决策（注入当前日期，LLM 不知道今天几号）
     from datetime import date
     today_str = date.today().isoformat()  # → "2026-07-24"
-    response = deepseek_client.chat.completions.create(
+    response = create_completion(
         model="deepseek-v4-flash",
         messages=[
             {"role": "system", "content": f"今天是 {today_str}。"},
@@ -214,7 +214,7 @@ def agent_chat_mcp(user_message: str, mcp_client: MCPClient) -> str:
 
         logger.debug("----- result -----\n%s", result)
         # 4. 把结果还给 LLM 生成最终回答
-        final_response = deepseek_client.chat.completions.create(
+        final_response = create_completion(
             model="deepseek-v4-flash",
             messages=[
                 {"role": "user", "content": user_message},
@@ -241,7 +241,7 @@ def agent_chat_mcp(user_message: str, mcp_client: "MCPClient") -> str:
     tools = mcp_client.get_tools_as_fc_format()
     today_str = date.today().isoformat()
 
-    response = deepseek_client.chat.completions.create(
+    response = create_completion(
         model="deepseek-v4-flash",
         messages=[
             {"role": "system", "content": f"今天是 {today_str}。"},
@@ -257,7 +257,7 @@ def agent_chat_mcp(user_message: str, mcp_client: "MCPClient") -> str:
         args = json.loads(tool_call.function.arguments)
         result = mcp_client.call_tool(tool_call.function.name, args)
 
-        final_response = deepseek_client.chat.completions.create(
+        final_response = create_completion(
             model="deepseek-v4-flash",
             messages=[
                 {"role": "user", "content": user_message},

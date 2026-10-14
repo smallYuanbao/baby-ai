@@ -4,7 +4,7 @@ from typing import Optional
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from app.services.llm import call_deepseek, deepseek_client
+from app.services.llm import call_deepseek, create_completion
 from app.services.tools import get_weather, WEATHER_TOOL
 from app.models.chat import ChatHistoryEntry, ChatMessage, Reference
 from app.services.chat_service import _build_messages
@@ -57,7 +57,7 @@ def reflect_and_correct(user_message: str, initial_answer: str) -> str:
         initial_answer=initial_answer
     )
 
-    response = deepseek_client.chat.completions.create(
+    response = create_completion(
         model="deepseek-v4-flash",
         messages=[{"role": "user", "content": prompt}],
         temperature=0,  # 审查必须稳定

@@ -4,7 +4,7 @@ from typing import Optional
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from app.services.llm import DEFAULT_MAX_TOKENS, call_deepseek, deepseek_client
+from app.services.llm import DEFAULT_MAX_TOKENS, call_deepseek, create_completion
 from app.services.tools import get_weather, WEATHER_TOOL
 from app.models.chat import ChatHistoryEntry, ChatMessage, Reference
 from app.services.chat_service import _build_messages
@@ -67,7 +67,7 @@ def agent_chat(user_message: str) -> str:
     messages = [{"role": "user", "content": user_message}]
 
     # 第一次调 LLM：让它决定是否需要调工具
-    response = deepseek_client.chat.completions.create(
+    response = create_completion(
         model="deepseek-v4-flash",
         messages=messages,
         tools=AVAILABLE_TOOLS,
@@ -128,7 +128,7 @@ def agent_chat(user_message: str) -> str:
         })
 
         # 第二次调 LLM：结合工具结果生成最终回答
-        final_response = deepseek_client.chat.completions.create(
+        final_response = create_completion(
             model="deepseek-v4-flash",
             messages=messages,
             temperature=0.7,
@@ -166,7 +166,7 @@ def react_agent_chat(user_message: str):
 
     for step in range(MAX_STEPS):
 
-        response = deepseek_client.chat.completions.create(
+        response = create_completion(
             model="deepseek-v4-flash",
             messages=messages,
             tools=AVAILABLE_TOOLS,
