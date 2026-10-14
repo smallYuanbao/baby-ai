@@ -167,8 +167,13 @@ def execute_rag_pipeline(
     answer = answer_cache.get(cache_key) if can_cache_answer else None
     if answer is None:
         answer = call_deepseek(messages)
-        if can_cache_answer:
+        # **空回答不缓存**：上游返回空（超时/异常/空内容）时若把它写进缓存，
+        # 之后**所有相同的提问都会命中这条空答案**，且不会自愈——服务不重启就一直错下去。
+        # （实测过：3/16 条样本回答为空,重启服务后同样的提问立刻恢复正常。）
+        if can_cache_answer and (answer or "").strip():
             answer_cache.set(cache_key, answer)
+        elif can_cache_answer:
+            logger.warning("[缓存] 上游返回空回答,跳过缓存: %s", cache_key)
     else:
         logger.info("[缓存] 答案命中: %s", cache_key)
 

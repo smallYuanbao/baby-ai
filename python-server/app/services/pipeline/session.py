@@ -81,7 +81,14 @@ def get_history(user_id: str, session_id: str) -> list[ChatHistoryEntry]:
             """,
             (user_id, session_id),
         ).fetchall()
-        return [ChatHistoryEntry(role=r["role"], content=r["content"]) for r in rows]
+        # 跳过 content 为空的历史行:老数据里可能存过空回答(修复前无此校验),
+        # 而 ChatHistoryEntry 要求至少 1 个字符——不跳过就会让该会话之后**永远 500**。
+        # 读时容错 + 写时拦截,两边都要有:拦的是新数据,容的是已经躺在库里的。
+        return [
+            ChatHistoryEntry(role=r["role"], content=r["content"])
+            for r in rows
+            if (r["content"] or "").strip()
+        ]
     finally:
         conn.close()
 
@@ -128,6 +135,14 @@ def add_user_message(user_id: str, session_id: str, content: str) -> None:
 
 
 def add_assitant_message(user_id: str, session_id: str, content: str) -> None:
-    """追加 AI 回答"""
+    """追加 AI 回答。
+
+    **空回答直接丢弃,不落库**:ChatHistoryEntry 要求 content 至少 1 个字符,
+    存进空串会让**该会话之后每次取历史都抛 ValidationError → 整个会话 500**。
+    一条空回答不该把整个会话废掉。(实测踩过:上游一次空响应导致后续请求全 500。)
+    """
+    if not (content or "").strip():
+        logger.warning("[会话] 回答为空,跳过落库 session=%s", session_id)
+        return
     count = add_message(user_id, session_id, "assistant", content)
     logger.info("--- 存入成功 --- session=%s, 当前消息数=%s", session_id, count)

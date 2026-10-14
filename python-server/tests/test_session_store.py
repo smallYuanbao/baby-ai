@@ -81,3 +81,23 @@ def test_multi_tenant_isolation(db):
     assert [m.content for m in bob_history] == ["bob 的问题"]
     # bob 拿不到 alice 的消息
     assert all("alice" not in m.content for m in bob_history)
+
+
+# —— 空回答不得污染会话(实测:一次空响应能让会话后续请求全 500) ——
+
+def test_empty_assistant_message_is_not_stored(db):
+    """空回答不落库。ChatHistoryEntry 要求 content≥1 字符,存进去会让该会话之后永远 500。"""
+    session.add_assitant_message("u_empty", "s_empty", "")
+    session.add_assitant_message("u_empty", "s_empty", "   ")
+    assert session.get_history("u_empty", "s_empty") == []
+
+    session.add_assitant_message("u_empty", "s_empty", "正常回答")
+    assert len(session.get_history("u_empty", "s_empty")) == 1
+
+
+def test_get_history_tolerates_already_poisoned_rows(db):
+    """读时容错:修复前已经写进库的空行,不能让该会话继续 500。"""
+    session.add_message("u_poison", "s_poison", "assistant", "")   # 绕过写时校验,模拟老数据
+    session.add_message("u_poison", "s_poison", "user", "你好")
+    hist = session.get_history("u_poison", "s_poison")             # 不抛 ValidationError
+    assert [h.content for h in hist] == ["你好"]

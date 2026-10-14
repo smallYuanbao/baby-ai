@@ -79,12 +79,23 @@ def call_deepseek(
         response = _call_deepseek_raw(messages, opts, stream=False)
         breaker.record_success()
 
+        content = response.choices[0].message.content
+        # **空内容按失败处理**:上游偶尔返回空(超时/截断/空 completion)。
+        # 不能把它当正常结果传下去——空答案会连锁污染:
+        #   ① 答案缓存把空串存下来 → 之后所有相同提问都命中这条空答案;
+        #   ② 会话历史存进 content='' → 该会话的后续请求在 ChatHistoryEntry 校验时 500。
+        # (实测:3/16 条样本回答为空,并伴随后续请求 500。)
+        if not (content or "").strip():
+            breaker.record_failure()
+            logger.warning("[LLM] 上游返回空内容,按失败处理并降级")
+            return _fallback_answer()
+
         if hasattr(response, 'usage') and response.usage:
             cost_tracker.record(
                 prompt_tokens=response.usage.prompt_tokens,
                 completion_tokens=response.usage.completion_tokens,
             )
-        return response.choices[0].message.content
+        return content
     except Exception as e:
         breaker.record_failure()
         logger.error("[LLM] 调用失败（重试后仍失败）: %s", e)
