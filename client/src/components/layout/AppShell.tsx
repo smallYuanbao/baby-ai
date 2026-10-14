@@ -42,8 +42,8 @@ export type { TabId };
 export function AppShell({ children, activeTab, onTabChange }: AppShellProps) {
   return (
     <div className={styles.wrapper}>
-      {/* 导航槽:一块 DOM 承载两种形态——窄屏在底部(横向 tab),
-          桌面在左侧(竖向侧栏)。用 order 控制位置,避免为此维护两套结构。 */}
+      {/* 左侧竖向导航栏。DOM 里放在内容之前，配合 .wrapper 的 flex-direction: row
+          自然落在左边，不需要额外定位。 */}
       <div className={styles.navSlot}>
         <TabBar activeTab={activeTab} onTabChange={onTabChange} />
       </div>

@@ -16,7 +16,6 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Message } from '../../types/chat';
 import { MessageAvatar } from './MessageAvatar';
-import { ReferenceList } from './ReferenceList';
 import { TypingIndicator } from './TypingIndicator';
 import styles from './MessageBubble.module.less';
 
@@ -108,12 +107,7 @@ export const MessageBubble = memo(function MessageBubble({
           )}
         </div>
 
-        {/* 引用列表：仅 AI 消息、有引用数据、且不在流式生成过程中才展示 */}
-        {!isUser && message.references && message.references.length > 0 && !isStreaming && (
-          <div className={styles.referenceArea}>
-            <ReferenceList references={message.references} />
-          </div>
-        )}
+        {/* 引用不再渲染在气泡里 —— 统一由右侧 ReferencePanel 常驻展示 */}
 
         {/* 朗读按钮：仅 AI 消息、有文本内容、非流式、且传入 onReadAloud 回调时展示 */}
         {!isUser && message.content && !isStreaming && onReadAloud && (

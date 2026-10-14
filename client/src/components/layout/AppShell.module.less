@@ -1,56 +1,38 @@
 /**
  * AppShell — top-level layout shell for the application.
  *
- * Provides a mobile-first, vertically-stacked container that constrains the
- * full viewport.  The narrow max-width (42rem) keeps content focused and
- * readable on wider screens, while 100dvh ensures correct sizing even when
- * mobile browser toolbars appear or disappear.
+ * **桌面专用**：本应用不做移动端适配（见 README「桌面端」说明）。
+ * 左侧竖向导航栏 + 右侧内容列（Header + main），铺满整个视口。
+ *
+ * 历史：这里原本是「移动优先」的写法 —— 窄屏时导航在底部、内容限制在
+ * 42rem 居中，≥1024px 才切成侧栏。决定只支持桌面后，桌面那套直接变成
+ * 无条件规则，窄屏分支和 order 换位都删掉了。
  */
 
 @import '../../styles/variables.less';
 
 // ── Root wrapper ────────────────────────────────────────────────────────────
-// Full-viewport column that centers a constrained-width card on desktop.
+// 横向两栏：左导航 + 右内容。铺满视口，不留居中留白。
 
 .wrapper {
   display: flex;
-  flex-direction: column;      // 窄屏:内容在上、导航在底部
-  height: 100dvh;              // dsvh avoids iOS Safari toolbar jank
-  max-width: 42rem;            // 窄屏/移动端:限制行宽,居中
-  margin: 0 auto;
+  flex-direction: row;
+  height: 100dvh;              // dvh 在桌面等价于 vh，保留以免将来又要在意浏览器工具栏
   background: @white;
-  box-shadow: @shadow-sm;
-
-  @media (min-width: 1024px) {
-    flex-direction: row;       // 桌面:导航变左侧侧栏,内容占右侧
-    max-width: none;           // 桌面铺满,不再限制成手机宽度
-    margin: 0;
-    box-shadow: none;
-  }
 }
 
-// 导航槽:窄屏在底部(order 2),桌面在左侧(order 1)
+// 导航槽：宽度由 TabBar 的 .nav 决定（8.5rem），这里只负责不参与收缩
 .navSlot {
-  order: 2;
-
-  @media (min-width: 1024px) {
-    order: 1;
-    flex-shrink: 0;
-  }
+  flex-shrink: 0;
 }
 
-// 内容列:Header + main,竖向堆叠
+// 内容列：Header + main，竖向堆叠，占据剩余宽度
 .content {
   flex: 1;
-  order: 1;
-  min-width: 0;                // 允许在桌面 flex row 内收缩
+  min-width: 0;                // 允许在 flex row 内收缩，否则长内容会把侧栏挤出去
   min-height: 0;
   display: flex;
   flex-direction: column;
-
-  @media (min-width: 1024px) {
-    order: 2;
-  }
 }
 
 .main {
@@ -59,5 +41,3 @@
   display: flex;
   flex-direction: column;      // allows children (e.g. message list) to stack
 }
-
-// 导航槽在桌面的宽度由 TabBar 的 .nav 决定(8.5rem),这里不用重复设

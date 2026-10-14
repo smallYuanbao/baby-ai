@@ -36,8 +36,9 @@
     <!-- Favicon served as an SVG for crisp rendering at all resolutions -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
-    <!-- Responsive-viewport meta: sets initial scale to 1.0 and disables user scaling
-         (common for SPAs where pinch-zoom can interfere with touch interactions) -->
+    <!-- Viewport meta：本应用只做桌面端适配（见 README），这里保留标准写法。
+         保留它的副作用是手机访问会按 device-width 渲染，三栏会被压得很窄；
+         若想让手机访问退回"缩小版桌面页"，删掉这一行即可。 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <!-- SEO: description used by search engines and social-media preview cards -->

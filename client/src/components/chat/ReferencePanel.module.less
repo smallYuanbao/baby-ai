@@ -1,26 +1,19 @@
 @import '../../styles/variables.less';
 
 // ============================================================
-//  ReferencePanel — 右侧引用面板(桌面三栏的第三栏)
+//  ReferencePanel — 右侧引用面板(三栏布局的第三栏)
 //
-//  只在 ≥1024px 显示。窄屏隐藏,改由聊天气泡内的折叠列表承载。
-//  与聊天区之间用 1px 分隔线,背景略深于主区,形成「附属信息」的层级。
+//  常驻显示。与聊天区之间用 1px 分隔线,背景略深于主区,形成「附属信息」的层级。
 // ============================================================
 
 .panel {
-  display: none;              // 默认(窄屏)隐藏,由媒体查询在桌面打开
+  display: flex;
   flex-direction: column;
   width: 20rem;               // 320px:够放卡片标题 + 分数徽章
   flex-shrink: 0;             // 不随聊天区变窄
   border-left: 1px solid @primary-50;
   background: @surface-light; // 比聊天区的白更暖一点,区分层级
   overflow: hidden;           // 滚交给内部 .list
-}
-
-@media (min-width: 1024px) {
-  .panel {
-    display: flex;
-  }
 }
 
 // ── 标题行 ──────────────────────────────────────────────────────

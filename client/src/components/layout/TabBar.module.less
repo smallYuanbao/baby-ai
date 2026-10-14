@@ -2,23 +2,21 @@
 
 // ============================================================
 //
-//  TabBar.module.less — Bottom Navigation Bar
+//  TabBar.module.less — Side Navigation Bar
 //
 //  @component TabBar
-//  @overview  Styles for the bottom tab bar that provides primary
-//             navigation between the three main sections of the app:
-//             Chat (💬), Growth (📈), and Play (🎮).
-//             The bar is fixed at the bottom of the viewport and
-//             renders a horizontal row of icon+label tabs with an
-//             active-state indicator.
+//  @overview  左侧竖向主导航，在三个主功能区之间切换：
+//             Chat (💬) / Growth (📈) / Play (🎮)
 //
-//  @states    Each tab supports three visual states:
-//             - inactive (gray icon/label, hover highlight)
-//             - active  (brand-orange icon/label, scale pop, indicator bar)
+//  @states    每个 tab 三种状态：
+//             - inactive（灰色图标/文字，hover 高亮）
+//             - active  （品牌橙色 + 左侧指示条）
 //
-//  @layout    The nav bar uses flexbox with equal-width tabs.
-//             flex-shrink: 0 prevents the bar from collapsing when
-//             the content area above it grows.
+//  @layout    桌面专用：固定 8.5rem 宽的竖栏，由 AppShell 排在内容左侧。
+//
+//  历史：这里原本是「底部横栏 + 桌面变竖栏」的响应式写法（同一块 DOM 两套
+//  形态，靠 @media 切换）。决定只支持桌面后，竖栏那套直接变成无条件规则，
+//  flex-direction: column / 圆角方向 / order 换位等分支全部删掉。
 //
 // ============================================================
 
@@ -26,43 +24,38 @@
 // Layout: Nav container
 // ---------------------------------------------------------------------------
 .nav {
-  flex-shrink: 0; // prevent bar from shrinking when main content overflows
+  flex-shrink: 0;                    // 不随内容区变宽而收缩
   display: flex;
-  border-top: 1px solid @primary-50; // subtle brand-tinted divider from content
+  flex-direction: column;
+  width: 8.5rem;                     // 136px：够放「聊天 / 成长 / 玩乐」三行
+  height: 100%;
+  padding-top: 1rem;
+  border-right: 1px solid @primary-50; // 与右侧内容区之间的品牌色分隔线
   background: @white;
-
-  // 桌面:同一块 DOM 从「底部横栏」变成「左侧竖栏」——
-  // 位置由 AppShell 的 order 控制,这里只负责内部方向与分隔线换边。
-  @media (min-width: 1024px) {
-    flex-direction: column;
-    width: 8.5rem;                     // 136px:够放「聊天 / 成长 / 玩乐」三行
-    height: 100%;
-    padding-top: 1rem;
-    border-top: none;
-    border-right: 1px solid @primary-50;
-  }
 }
 
 // ---------------------------------------------------------------------------
 // Layout: Individual tab button
 // ---------------------------------------------------------------------------
 .tab {
-  // 清掉 <button> 的浏览器默认外观(灰底 + 描边 + 系统字体)。
-  // 全局样式没有做按钮 reset,不清的话每个 tab 会自带一个灰色方框。
+  // 清掉 <button> 的浏览器默认外观。全局 reset 已经做过一次，这里保留是为了
+  // 让本模块单独看也是完整的（不依赖引入顺序）。
   appearance: none;
   border: none;
   background: none;
   font-family: inherit;
   font-size: inherit;
-  flex: 1; // equal-width tabs — each takes the same horizontal space
+
+  flex: 0 0 auto;                    // 按自然高度排列，不撑满整列
   display: flex;
-  flex-direction: column;
+  flex-direction: row;               // 图标在左、文字在右
   align-items: center;
-  justify-content: center;
-  padding-top: @space-2d5; // 10px — vertical breathing room for icon+label
-  padding-bottom: @space-2d5;
-  transition: all @transition-base; // smooth colour/background changes on toggle
-  gap: @space-1; // 4px — tight vertical gap between icon and label
+  justify-content: flex-start;
+  gap: 0.625rem;
+  padding: 0.625rem 1rem;
+  position: relative;                // 给左侧指示条做定位父级
+  border-radius: 0 @radius-xl @radius-xl 0; // 贴左边，右侧圆角
+  transition: all @transition-base;
   cursor: pointer;
 }
 
@@ -81,7 +74,7 @@
   color: @gray-400; // muted gray for unselected tabs
 
   &:hover {
-    color: @gray-600; // darken icon/label on hover for touch feedback
+    color: @gray-600; // darken icon/label on hover
     background: @gray-50; // subtle near-white lift on hover
   }
 }
@@ -90,8 +83,8 @@
 // Icon
 // ---------------------------------------------------------------------------
 .icon {
-  font-size: @text-xl; // 20px — large enough to be tappable and legible
-  transition: transform @transition-base; // smooth scale-pop on activation
+  font-size: @text-xl; // 20px
+  transition: transform @transition-base;
 }
 
 .iconActive {
@@ -102,7 +95,7 @@
 // Label
 // ---------------------------------------------------------------------------
 .label {
-  font-size: @text-xs; // 12px — compact label that fits below the icon
+  font-size: @text-xs; // 12px
   font-weight: 500;
 }
 
@@ -111,38 +104,15 @@
 }
 
 // ---------------------------------------------------------------------------
-// Active indicator bar
+// Active indicator — 贴左侧的短竖条
 // ---------------------------------------------------------------------------
 .indicator {
-  width: @space-6; // 24px — short bar centred under the tab (not full-width)
-  height: @space-0d5; // 2px — thin underline accent
-  background: @primary-500; // matches the active brand colour
-  border-radius: @radius-full; // pill shape — soft rounded ends
-}
-
-// ---------------------------------------------------------------------------
-// 桌面:侧栏形态
-// ---------------------------------------------------------------------------
-// 同一块 DOM,只改「内部方向」与「指示条朝向」——位置(左/底)由 AppShell 的 order 决定。
-@media (min-width: 1024px) {
-  .tab {
-    flex: 0 0 auto;              // 侧栏项按自然高度排列,不像底部栏那样等分撑满
-    flex-direction: row;         // 图标在左、文字在右
-    justify-content: flex-start;
-    align-items: center;
-    gap: 0.625rem;
-    padding: 0.625rem 1rem;
-    position: relative;          // 给左侧指示条做定位父级
-    border-radius: 0 @radius-xl @radius-xl 0; // 贴左边,右侧圆角
-  }
-
-  // 指示条:从「文字下方的细横线」变成「贴左侧的短竖条」
-  .indicator {
-    position: absolute;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: @space-0d5;           // 2px 宽
-    height: 1.25rem;             // 20px 高
-  }
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: @space-0d5;                 // 2px 宽
+  height: 1.25rem;                   // 20px 高
+  background: @primary-500;
+  border-radius: @radius-full;
 }

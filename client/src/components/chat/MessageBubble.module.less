@@ -56,7 +56,7 @@
 // to 85 % of the wrapper.
 .bubble {
   display: inline-block;
-  max-width: 85%;            // keeps long lines readable; matches referenceArea
+  max-width: 85%;            // keeps long lines readable
   padding-left: 1rem;
   padding-right: 1rem;
   padding-top: 0.625rem;     // 10 px — tighter than horizontal to look balanced
@@ -145,17 +145,9 @@
 // ---------------------------------------------------------------------------
 // Auxiliary areas
 // ---------------------------------------------------------------------------
-
-// Container for source references / citations shown with AI responses.
-.referenceArea {
-  max-width: 85%;           // matches bubble max-width for visual alignment
-
-  // 桌面:引用改由右侧 ReferencePanel 常驻展示,气泡内这份要收起来,
-  // 否则同一批证据会在两处同时出现。
-  @media (min-width: 1024px) {
-    display: none;
-  }
-}
+// 引用不再渲染在气泡里 —— 统一由右侧 ReferencePanel 常驻展示。
+// （原先窄屏会退化成"气泡内可折叠列表"，只支持桌面后那条分支连同
+//  ReferenceList 组件一起删掉了，否则同一批证据会在两处出现两次。）
 
 // ---------------------------------------------------------------------------
 // Read-aloud button
