@@ -1,7 +1,10 @@
+import asyncio
 import json
-from typing import Optional
+import threading
+from typing import Callable, Optional
 
 from fastapi import Request
+from starlette.concurrency import run_in_threadpool
 
 from app.models.chat import ChatHistoryEntry, ChatMessage, Reference
 
@@ -32,6 +35,19 @@ DEFENSE_PROMPT = """
 # 答案缓存：省 LLM 调用，仅在「无历史上下文」的 FAQ 场景启用
 rag_cache = TTLCache(maxsize=RAG_CACHE_MAXSIZE, ttl=RAG_CACHE_TTL)
 answer_cache = TTLCache(maxsize=RAG_CACHE_MAXSIZE, ttl=RAG_CACHE_TTL)
+
+
+class RetrievalAborted(Exception):
+    """检索进行中客户端断开了，主动放弃本次生成。
+
+    为什么需要它：检索（查询改写 → 意图路由 → 混合检索 → 精排）整条链要几十秒，
+    其中查询改写、意图复核、精排兜底还会各自调一次 LLM。用户点「停止生成」后，
+    客户端断开只会在**开始往 LLM 输出 token 时**才被察觉——那时检索早就白跑完了。
+
+    检索是同步代码、跑在线程池里，没法直接 await request.is_disconnected()，
+    所以由 execute_rag_stream 起一个轮询任务置位 threading.Event，
+    检索在阶段之间检查这个标记（should_abort 参数），命中就抛这个异常。
+    """
 
 
 def _cache_key(query: str) -> str:
@@ -76,9 +92,15 @@ def get_rag_context(
     client_history: list[ChatHistoryEntry],
     user_id: str,
     file_id: Optional[str] = None,
+    should_abort: Optional[Callable[[], bool]] = None,
 ) -> tuple[list[ChatMessage], list[Reference], str, bool]:
     """
     检索 + 构建 Prompt。
+
+    Args:
+        should_abort: 可选的取消标记。返回 True 表示客户端已经断开，检索应立刻
+                      放弃并抛 {@link RetrievalAborted}。只有流式路径会传它；
+                      非流式路径（/api/chat）不传，行为与以前一致。
 
     Returns:
         messages:        拼好的完整 messages 数组（可直接传给 LLM）
@@ -87,17 +109,30 @@ def get_rag_context(
         can_cache_answer: 能否缓存答案（仅无历史上下文的 FAQ 场景为 True）
     """
 
+    def checkpoint(stage: str) -> None:
+        """阶段之间的取消点。
+
+        放在每个耗时阶段**之后**：做完的那一步的成果不要了，但至少不会
+        继续往下做更贵的事（尤其是别再去调 LLM）。
+        """
+        if should_abort is not None and should_abort():
+            logger.info("[检索] 客户端已断开，跳过后续步骤（已完成: %s）", stage)
+            raise RetrievalAborted(stage)
+
     # 1. 取服务端历史（如果客户端没传，用服务端的）
     server_history = get_history(user_id, session_id)
     history = client_history if client_history else server_history
+    checkpoint("取历史")
 
-    # 2. 改写
+    # 2. 改写（内部会调 LLM）
     rewrite_result = rewrite_query(user_message, history)
     message = rewrite_result.wasRewritten and rewrite_result.rewrittenQuery or user_message
+    checkpoint("查询改写")
 
-    # 3. 意图路由
+    # 3. 意图路由（低置信时内部会调 LLM 复核）
     intent_result = route_intent(message)
     logger.info("[意图路由] 类别: %s", intent_result.intent)
+    checkpoint("意图路由")
 
     # 缓存 key：改写后的 query 规范化（改写已把代词还原成完整问法）
     cache_key = _cache_key(message)
@@ -118,19 +153,21 @@ def get_rag_context(
             logger.info("[缓存] 检索结果命中: %s", cache_key)
         else:
             results = hybrid_search(message, alpha=0.7, top_k=10)
+            checkpoint("混合检索")
 
             # RRF 混合检索 → 多召回一些候选
             # results = hybrid_search_rrf(message, top_k=10)
 
-            # 精排：BGE → DeepSeek → 原始距离排序
+            # 精排：BGE → DeepSeek → 原始距离排序（DeepSeek 兜底时会调 LLM）
             ranked_result = rerank(message, results, top_k=5)
+            checkpoint("精排")
 
             # 文本列表（给 buildPrompt 拼 prompt 用）
             context_docs = [d["text"] for d in ranked_result["rankedDocuments"]]
 
             # 结构化引用（给前端展示，包含 id + text）
             references = [
-                Reference(id=d["id"] or "", text=d["text"])
+                Reference(id=d["id"] or "", text=d["text"], score=d.get("score"))
                 for d in ranked_result["rankedDocuments"]
             ]
             if not file_id:
@@ -145,7 +182,7 @@ def get_rag_context(
                 context_docs = [d.text for d in file_docs] + context_docs
                 logger.info("[文件上下文] 命中 %s 的 %d 个 chunks", file_id, len(file_docs))
 
-    # 5. 拼 messages
+    # 5. 拼 messages（纯字符串拼接，很快，但仍放在最后的取消点之后）
     messages = _build_messages(message, context_docs, history, intent_result)
     return messages, references, cache_key, can_cache_answer
 
@@ -194,6 +231,34 @@ def execute_rag_pipeline(
     return {"answer": answer, "references": references}
 
 
+async def _watch_disconnect(
+    request: Request,
+    abort: threading.Event,
+    interval: float = 0.25,
+) -> None:
+    """轮询客户端连接，断开就置位 ``abort``。
+
+    为什么是轮询而不是 await 一次：``request.is_disconnected()`` 只在断开消息
+    已经到达时才返回 True，单次调用探不到仍在连接中的状态；而且检索是同步函数、
+    跑在线程池里，没法在它内部 await。所以由事件循环上的这个任务负责探，
+    探到就置位一个线程安全的 Event，检索在阶段之间读它
+    （见 get_rag_context 的 should_abort 参数）。
+    """
+    try:
+        while not abort.is_set():
+            if await request.is_disconnected():
+                logger.info("[流式] 探测到客户端断开，通知检索层放弃")
+                abort.set()
+                return
+            await asyncio.sleep(interval)
+    except asyncio.CancelledError:
+        # 正常收尾路径：生成器结束时我们主动取消这个任务
+        raise
+    except Exception as e:
+        # 探测失败不该影响主流程，最坏就是退回「只在 LLM 循环里查断开」的旧行为
+        logger.debug("[流式] 断开探测出错(忽略): %s", e)
+
+
 async def execute_rag_stream(
     user_message: str,
     session_id: str,
@@ -203,21 +268,45 @@ async def execute_rag_stream(
     file_id: Optional[str] = None,
 ):
     """流式 RAG 管道（异步生成器）"""
-    messages, references, _cache_key, _can_cache_answer = get_rag_context(
-        user_message, session_id, client_history, user_id, file_id,
-    )
+    # 起一个断开探测器。下面的检索跑在线程池里，探测器是它唯一的「取消通道」。
+    abort = threading.Event()
+    watcher = asyncio.create_task(_watch_disconnect(request, abort))
 
-    refs_json = json.dumps(
-        [r.model_dump() for r in references],
-        ensure_ascii=False,
-    )
-    yield f"event: references\ndata: {refs_json}\n\n"
+    try:
+        # 检索整条链是同步的：BM25、ChromaDB、BGE 精排，而且查询改写 / 意图复核 /
+        # 精排兜底各自还会同步调一次 LLM。**必须丢线程池**——直接在事件循环上跑
+        # 会把它按住整整数十秒（实测：期间 /api/health 从 1.3ms 变成 38.2 秒，
+        # 前端随后发起的提问全部排队干等）。
+        try:
+            messages, references, _cache_key, _can_cache_answer = await run_in_threadpool(
+                get_rag_context,
+                user_message,
+                session_id,
+                client_history,
+                user_id,
+                file_id,
+                abort.is_set,
+            )
+        except RetrievalAborted:
+            # 用户已经点了「停止生成」，再花钱调 LLM 没有意义
+            logger.info("[流式] 检索阶段客户端断开，本次不生成回答")
+            return
 
-    async for chunk in generate_stream_with_interrupt_and_fallback(messages, request):
-        # token 包装成 SSE 事件：generate_stream 内部 yield 的是裸文本，
-        # 前端 useSSE 期望 `event: token`，data 为 {text} 对象（兼容纯字符串）
-        yield f"event: token\ndata: {json.dumps({'text': chunk}, ensure_ascii=False)}\n\n"
+        refs_json = json.dumps(
+            [r.model_dump() for r in references],
+            ensure_ascii=False,
+        )
+        yield f"event: references\ndata: {refs_json}\n\n"
 
-    yield f"event: done\ndata: {{}}\n\n"
+        async for chunk in generate_stream_with_interrupt_and_fallback(messages, request):
+            # token 包装成 SSE 事件：generate_stream 内部 yield 的是裸文本，
+            # 前端 useSSE 期望 `event: token`，data 为 {text} 对象（兼容纯字符串）
+            yield f"event: token\ndata: {json.dumps({'text': chunk}, ensure_ascii=False)}\n\n"
 
-    add_user_message(user_id, session_id, user_message)
+        yield f"event: done\ndata: {{}}\n\n"
+
+        # 会话存储是同步 IO，同样丢线程池，别在最后一下又把循环按一下
+        await run_in_threadpool(add_user_message, user_id, session_id, user_message)
+    finally:
+        # 无论正常结束、异常还是被提前关闭，探测器都要收掉
+        watcher.cancel()
