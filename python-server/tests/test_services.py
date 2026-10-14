@@ -229,3 +229,79 @@ def test_query_rewrite_rejects_fallback_text(monkeypatch):
 
     assert result.wasRewritten is False
     assert result.rewrittenQuery == "他需要吃药吗"      # 退回原问题,不是兜底话术
+
+# —— 检索相关性门控:知识库里没有相关内容时,别把无关文档塞进 prompt ——
+
+def _stub_rag(monkeypatch, ranked_docs):
+    """把 get_rag_context 的外部依赖全替换掉,只留门控逻辑是真的。"""
+    from types import SimpleNamespace
+
+    from app.services import chat_service
+
+    monkeypatch.setattr(chat_service, "get_history", lambda *a, **k: [])
+    monkeypatch.setattr(
+        chat_service, "rewrite_query",
+        lambda m, h: SimpleNamespace(wasRewritten=False, rewrittenQuery=m),
+    )
+    monkeypatch.setattr(
+        chat_service, "route_intent",
+        lambda m: SimpleNamespace(intent="general", prompt=""),
+    )
+    monkeypatch.setattr(chat_service, "hybrid_search", lambda *a, **k: [])
+    monkeypatch.setattr(
+        chat_service, "rerank",
+        lambda q, docs, top_k: {"rankedDocuments": ranked_docs},
+    )
+
+
+def test_rag_gate_drops_irrelevant_retrieval(monkeypatch):
+    """知识库无相关内容时,明确丢弃检索结果,而不是塞进 prompt。
+
+    实测踩过:问「你是谁」时精排照样返回 5 篇儿科文档、分数**全是 0.0**;prompt 里
+    又写着「如果参考资料信息不足,请诚实说明」,于是模型回一句「参考资料里没有关于
+    "我是谁"的信息」—— 把内部机制说给用户听,还平白多出一整套儿科问诊的架子
+    (含「🚨 什么时候去医院：这个问题不用去医院😄」)。
+    """
+    from app.services.chat_service import get_rag_context
+
+    _stub_rag(monkeypatch, [
+        {"id": "d1", "text": "完全无关的儿科文档A", "score": 0.0},
+        {"id": "d2", "text": "完全无关的儿科文档B", "score": 0.0},
+    ])
+
+    messages, refs, _, _ = get_rag_context("门控测试-无关问题", "sess-gate-a", [], "alice")
+
+    assert refs == []
+    assert "完全无关的儿科文档" not in " ".join(m.content for m in messages)
+
+
+def test_rag_gate_keeps_relevant_retrieval(monkeypatch):
+    """相关问题不能被门控误伤 —— 证据被丢掉等于把答案降级成纯模型记忆。"""
+    from app.services.chat_service import get_rag_context
+
+    _stub_rag(monkeypatch, [
+        {"id": "d1", "text": "宝宝发烧护理指南", "score": 0.96},
+        {"id": "d2", "text": "退烧药使用说明", "score": 0.41},
+    ])
+
+    messages, refs, _, _ = get_rag_context("门控测试-相关问题", "sess-gate-b", [], "alice")
+
+    assert len(refs) == 2
+    assert refs[0].score == 0.96
+    assert "宝宝发烧护理指南" in " ".join(m.content for m in messages)
+
+
+def test_rag_gate_handles_empty_retrieval(monkeypatch):
+    """知识库为空(rankedDocuments 是空列表)时不能 500。
+
+    门控用 max() 取最高分,而 max() 遇到空序列会抛 ValueError —— 空库应当走
+    「无相关内容」这条分支,而不是把请求打成 500。
+    """
+    from app.services.chat_service import get_rag_context
+
+    _stub_rag(monkeypatch, [])
+
+    messages, refs, _, _ = get_rag_context("门控测试-空知识库", "sess-gate-c", [], "alice")
+
+    assert refs == []
+    assert messages      # prompt 仍然拼得出来

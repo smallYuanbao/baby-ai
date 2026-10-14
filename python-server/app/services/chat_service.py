@@ -36,6 +36,13 @@ DEFENSE_PROMPT = """
 rag_cache = TTLCache(maxsize=RAG_CACHE_MAXSIZE, ttl=RAG_CACHE_TTL)
 answer_cache = TTLCache(maxsize=RAG_CACHE_MAXSIZE, ttl=RAG_CACHE_TTL)
 
+# 检索相关性门控：top1 分数低于此值就认为「知识库没有相关内容」，不注入任何文档。
+#
+# 阈值定得这么低（0.1）是刻意的：实测无关问题恒为 0.0，真问题的 top1 在 0.96 上下，
+# 中间隔着整个量程。宁可漏拦（无关文档照旧进 prompt，模型自己能忽略），
+# 也不可误拦（把真问题的证据丢掉，在育儿/医疗场景里等于把答案降级成纯模型记忆）。
+RAG_MIN_TOP_SCORE = 0.1
+
 
 class RetrievalAborted(Exception):
     """检索进行中客户端断开了，主动放弃本次生成。
@@ -170,6 +177,33 @@ def get_rag_context(
                 Reference(id=d["id"] or "", text=d["text"], score=d.get("score"))
                 for d in ranked_result["rankedDocuments"]
             ]
+
+            # 相关性门控：知识库里没有相关内容时，**不要把无关文档塞进 prompt**。
+            #
+            # 不加这道门会怎样：问「你是谁」时精排照样返回 5 篇儿科文档，prompt 里
+            # 又写着「如果参考资料信息不足，请诚实说明」，于是模型老实回一句
+            # 「参考资料里没有关于"我是谁"的信息」—— 把内部机制说给了用户，
+            # 还平白多出一段儿科问诊的架子。
+            #
+            # 实测 BGE 精排的分数把两种情况分得很开：
+            #   完全无关（你是谁 / 今天天气怎么样）→ 0.0 / 0.0 / 0.0 / 0.0 / 0.0
+            #   真问题（宝宝发烧了怎么办）        → 0.96 / 0.41 / 0.14 / 0.06 / 0.03
+            # 只看 top1：真问题的低分候选本来就排在第 3~5 位，用「全部分数都低」判会误伤。
+            # default=0.0：知识库为空时 rankedDocuments 是空列表，裸写 max() 会抛
+            # ValueError（max() arg is an empty sequence）—— 空库应当走"无相关内容"
+            # 这条分支，而不是让整个请求 500。
+            top_score = max(
+                (d.get("score") or 0.0 for d in ranked_result["rankedDocuments"]),
+                default=0.0,
+            )
+            if top_score < RAG_MIN_TOP_SCORE:
+                logger.info(
+                    "[检索] 最高相关性仅 %.3f（阈值 %.2f），判定知识库无相关内容：%s",
+                    top_score, RAG_MIN_TOP_SCORE, message,
+                )
+                context_docs = []
+                references = []
+
             if not file_id:
                 rag_cache.set(cache_key, references)
 
