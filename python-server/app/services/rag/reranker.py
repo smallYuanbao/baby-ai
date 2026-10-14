@@ -33,8 +33,24 @@ from typing import Optional
 
 from app.core.config import RERANKER_URL
 from app.models.chat import ChatMessage, ChatOptions, RAGDocument
-from app.services.llm import call_deepseek
+from app.services.llm import DEFAULT_MAX_TOKENS, call_deepseek
 from app.utils.logger import logger
+
+
+def _fallback_score(d: RAGDocument) -> float:
+    """降级路径下的相关性分数（0~1，越大越相关）。
+
+    两种来源的文档字段不一样，这里要都能接住：
+      - hybrid_search 出来的文档：有 score（混合检索算好的），**没有 distance**
+      - ChromaDB 直查出来的文档：有 distance，没有 score
+
+    早先这里只写 `1 - (d.distance or 0)`：distance 为 None 时 `or 0` 兜成 0，
+    于是每篇文档都得到 1.0。结果是精排一旦降级，前端「相关性」徽章对
+    所有引用都显示 100%，比不显示还误导。
+    """
+    if d.score is not None:
+        return d.score
+    return 1 - (d.distance or 0)
 
 
 # ============================================================
@@ -202,12 +218,19 @@ def rerank_with_llm(query: str, docs: list[RAGDocument], top_k: int):
     # Step 2：构建 Prompt + 调用 DeepSeek
     # ============================================================
     # temperature=0：确保输出确定性（相同输入 → 相同排序）
-    # maxTokens=50：只返回几个数字编号，不需要很多 token
+    #
+    # 预算必须给足，**不能**因为「只返回几个编号」就调小。这里原先是 50
+    # （短 prompt 下勉强能过，实测用掉 43），但真实精排 prompt 下思维链会把额度
+    # 烧光 → content 为空 → 整层 LLM 精排静默退化成「按向量距离排序」，等于没精排。
+    #
+    # 也别套用 SHORT_TASK_MAX_TOKENS：那档是给「输出一个词」的意图分类用的。
+    # 精排虽然也只输出几个数字，却要模型读完十几篇候选再比对，思维链长度方差很大
+    # （实测 1100～2700+ 字符，1024 都还被截断过），直接给默认预算。
     messages = [ChatMessage(
         role="user",
         content=f"从下列文档中选出与查询最相关的 {top_k} 条，每行输出一个编号（只输出数字）：\n\n查询：{query}\n\n{doc_list_text}",
     )]
-    options = ChatOptions(temperature=0, maxTokens=50)
+    options = ChatOptions(temperature=0, maxTokens=DEFAULT_MAX_TOKENS)
     content = call_deepseek(messages, options)
 
     # ============================================================
@@ -253,7 +276,7 @@ def rerank_with_llm(query: str, docs: list[RAGDocument], top_k: int):
         result = []
         for i, d in enumerate(docs[:top_k]):
             doc_copy = d.model_dump()                      # Pydantic → dict
-            doc_copy["score"] = 1 - (d.distance or 0)      # 距离转正向分数
+            doc_copy["score"] = _fallback_score(d)         # 用检索分数兜底
             result.append(doc_copy)
         return result
 
@@ -333,7 +356,7 @@ def rerank(query: str, docs: list[RAGDocument], top_k: int):
         for d in docs:
             # d.model_dump() 把 Pydantic 模型转成 dict
             # {**dict, "score": ...} 再追加 score 字段
-            result.append({**d.model_dump(), "score": 1 - (d.distance or 0)})
+            result.append({**d.model_dump(), "score": _fallback_score(d)})
         return {"query": query, "rankedDocuments": result}
 
     # ============================================================
@@ -357,13 +380,13 @@ def rerank(query: str, docs: list[RAGDocument], top_k: int):
             logger.error("DeepSeek 排序也失败: %s，使用原始检索结果", e)
 
             # sorted() 返回一个新列表，不修改原列表
-            # distance 越小文档越相关 → 升序排列
-            docs_sorted = sorted(docs, key=lambda d: d.distance or 0)
+            # 相关性分数越大越靠前 → 降序排列
+            docs_sorted = sorted(docs, key=_fallback_score, reverse=True)
 
             result = []
             for d in docs_sorted[:top_k]:
                 # .model_dump() 转 dict + 追加 score
-                result.append({**d.model_dump(), "score": 1 - (d.distance or 0)})
+                result.append({**d.model_dump(), "score": _fallback_score(d)})
 
             ranked = result
 
@@ -381,7 +404,7 @@ def rerank(query: str, docs: list[RAGDocument], top_k: int):
             if len(ranked) >= top_k:
                 break
             if d.text[:80] not in selected_texts:
-                ranked.append({**d.model_dump(), "score": 1 - (d.distance or 0)})
+                ranked.append({**d.model_dump(), "score": _fallback_score(d)})
 
     return {"query": query, "rankedDocuments": ranked}
 

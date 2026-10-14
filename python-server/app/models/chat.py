@@ -16,6 +16,9 @@ class ChatRequest(BaseModel):
 class Reference(BaseModel):
     id: str     # 文档在 ChromaDB 中的唯一 ID（如 med_fbacde39）
     text: str   # 文档内容（截断展示）
+    # 相关性分数（0~1，越大越相关）。由 rerank 阶段算出，前端用它渲染「相关性」徽章。
+    # 缺失时为 None —— 例如工具调用产生的合成引用，没有经过检索排序。
+    score: Optional[float] = None
 
 class ChatResponse(BaseModel):
     answer: str

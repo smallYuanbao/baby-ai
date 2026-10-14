@@ -1,7 +1,7 @@
 from typing import Literal, Dict, Optional
 from  pydantic import BaseModel
 
-from app.services.llm import call_deepseek
+from app.services.llm import SHORT_TASK_MAX_TOKENS, call_deepseek
 from app.models.chat import ChatMessage, ChatOptions
 from app.utils.logger import logger
 
@@ -334,9 +334,14 @@ def classify_by_llm(question: str) -> Intent:
         # 1. 构建单条 user 消息（分类不需要 system prompt 和历史）
         prompt_text = LLM_CLASSIFY_PROMPT.replace("{question}", question)
 
-        # 2. 调用 DeepSeek（temperature=0 保证确定性，maxTokens=10 只要一个词）
+        # 2. 调用 DeepSeek（temperature=0 保证确定性；预算用 SHORT_TASK_MAX_TOKENS）
+        #
+        # 这里原先是 maxTokens=10 —— 想着「只要一个词，10 个 token 够了」。
+        # 但当前模型是推理模型，会先输出思维链再输出正文，两者共用这个额度：
+        # 10 个 token 全被思维链吃掉，content 恒为空串，分类**每次都**降级成
+        # general（表面无异常，只是系统提示词用错了档）。实测见 llm.py 的说明。
         messages = [ChatMessage(role="user", content=prompt_text)]
-        options = ChatOptions(temperature=0, maxTokens=10)
+        options = ChatOptions(temperature=0, maxTokens=SHORT_TASK_MAX_TOKENS)
         content = call_deepseek(messages, options)
 
         # 3. 从返回内容中提取第一个匹配的有效意图标签

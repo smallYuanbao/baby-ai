@@ -177,6 +177,9 @@ def baby_talk(data: BabyTalkRequest):
             ChatMessage(role="system", content=BABY_TALK_PROMPT),
             ChatMessage(role="user", content=user_message),
         ],
-        ChatOptions(temperature=0.9, maxTokens=500),
+        # 不要设 maxTokens：这里原先是 500，但这是一次**生成**任务（解读宝宝行为），
+        # 推理模型的思维链 + 正文实测要 1400+ token —— 500 每次都把额度烧光、
+        # content 返回空串，接口恒定吐出「抱歉，当前服务繁忙」。走默认预算即可。
+        ChatOptions(temperature=0.9),
     )
     return {"interpretation": content}

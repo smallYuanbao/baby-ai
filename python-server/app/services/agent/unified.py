@@ -183,9 +183,9 @@ def rag_and_rerank(intent_result: IntentResult, message: str ) -> tuple[list[str
         # 文本列表（给 buildPrompt 拼 prompt 用）
         context_docs = [d["text"] for d in ranked_result["rankedDocuments"]]
 
-        # 结构化引用（给前端展示，包含 id + text）
+        # 结构化引用（给前端展示，包含 id + text + score）
         references = [
-            Reference(id=d["id"] or "", text=d["text"])
+            Reference(id=d["id"] or "", text=d["text"], score=d.get("score"))
             for d in ranked_result["rankedDocuments"]
         ]
     return context_docs, references
