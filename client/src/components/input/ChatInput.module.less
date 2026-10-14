@@ -42,8 +42,11 @@
 
 .inputArea {
   display: flex;
-  // Align items to the bottom so buttons sit at the same baseline as the
-  // textarea, even when the textarea grows taller (multi-line)
+  // 底部对齐：textarea 长到多行时，三个按钮保持贴着底边（单行时它们高度相同，
+  // 效果等同于垂直居中）。
+  //
+  // 这里依赖「各子项底边严格对齐」，所以**不要**再给某个按钮单独加 margin-bottom
+  // 做"视觉微调" —— 发送按钮没加、上传/语音加了 2px，结果就是发送按钮明显偏低。
   align-items: flex-end;
   gap: @space-2;
 }
@@ -52,15 +55,9 @@
 // Action Buttons (attach, mic) — left of the textarea
 // ---------------------------------------------------------------------------
 
-.attachButton {
-  // Optical alignment: nudge the button slightly above the textarea baseline
-  // so it appears visually centered within the row
-  margin-bottom: @space-0d5;
-}
-
-.micButton {
-  margin-bottom: @space-0d5;
-}
+// .attachButton / .micButton 两个包裹层不需要任何样式：它们里面的按钮是
+// 块级 flex 容器，本身没有基线间隙；对齐完全交给 .inputArea 的 align-items。
+// （原先这里各有一条 margin-bottom 做「视觉微调」，正是它让发送按钮显得偏低。）
 
 // ---------------------------------------------------------------------------
 // Textarea
@@ -69,6 +66,11 @@
 .textareaWrapper {
   flex: 1;
   position: relative;
+  // textarea 默认是 inline-block，放在块级父元素里会产生「基线间隙」，
+  // 包裹层因此比 textarea 本身高出几个像素（实测 52px vs 44px）。
+  // flex 布局下这个间隙消失，包裹层高度 == textarea 高度，
+  // .inputArea 的 flex-end 才是拿真正的文本框底边在跟按钮对齐。
+  display: flex;
 }
 
 .textarea {

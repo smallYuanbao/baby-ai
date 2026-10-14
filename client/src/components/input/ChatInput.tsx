@@ -22,6 +22,16 @@ import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
 import styles from './ChatInput.module.less';
 
 /**
+ * 输入框的高度区间（px）。
+ *
+ * 下限对齐右侧发送按钮的 44px（WCAG 触摸目标最小值），
+ * 上限避免输入框长高后把上方的消息区挤没。
+ * 自增高逻辑和 JSX 上的内联样式共用这两个值，别在两处各写一遍。
+ */
+const MIN_TEXTAREA_HEIGHT = 44;
+const MAX_TEXTAREA_HEIGHT = 120;
+
+/**
  * Props accepted by the {@link ChatInput} component.
  */
 interface ChatInputProps {
@@ -90,7 +100,12 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop }: ChatInputPr
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+    // scrollHeight **含 padding 但不含 border**，而全局 box-sizing 是 border-box
+    // （height 含边框）。直接把 scrollHeight 赋给 height 会少算上下边框那 2px，
+    // 内容区永远差一点点 → 输入框右侧常驻一条滚动条。
+    // offsetHeight - clientHeight 正好是上下边框总高。
+    const borderY = el.offsetHeight - el.clientHeight;
+    el.style.height = `${Math.min(el.scrollHeight + borderY, MAX_TEXTAREA_HEIGHT)}px`;
   }, []);
 
   /**
@@ -109,16 +124,20 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop }: ChatInputPr
   }, [text, disabled, fileState, onSend, clearFile]);
 
   /**
-   * Keyboard handler — `Enter` (without Shift) sends the message.
-   * Holding `Shift` allows the default newline behaviour so the user can compose
-   * multi-line messages.
+   * Keyboard handler — `Enter` (without Shift) sends, `Shift+Enter` inserts a
+   * newline so the user can compose multi-line messages.
+   *
+   * 中文/日文输入法**用回车确认候选词**，那个回车不是「发送」。所以必须先判断
+   * 当前是否处于输入法组词状态，否则打字打到一半敲回车就会把半截拼音发出去。
+   * `keyCode === 229` 是部分浏览器在组词期间给的占位值，一并挡掉（isComposing
+   * 在个别浏览器上结束得偏早，两个条件一起判断更稳）。
    */
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        handleSend();
-      }
+      if (e.key !== 'Enter' || e.shiftKey) return;
+      if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+      e.preventDefault();
+      handleSend();
     },
     [handleSend],
   );
@@ -178,9 +197,10 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop }: ChatInputPr
             disabled={disabled}
             rows={1}
             className={styles.textarea}
-            // 44px matches a single-line height; 120px is the max to avoid
-            // the input growing taller than a comfortable chat viewport.
-            style={{ minHeight: '44px', maxHeight: '120px' }}
+            style={{
+              minHeight: `${MIN_TEXTAREA_HEIGHT}px`,
+              maxHeight: `${MAX_TEXTAREA_HEIGHT}px`,
+            }}
           />
         </div>
 
