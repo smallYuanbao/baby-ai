@@ -16,17 +16,12 @@
 .wrapper {
   flex: 1;
   overflow-y: auto;
-  padding: 1.5rem 1rem;
-
-  // 桌面：这个页面的内容（图标 + 标题 + 按钮 + 宝宝卡片）本来就是单列窄内容，
-  // 铺满整个宽屏会把「添加宝宝」拉成一条上千像素的长条。限宽居中，让它保持
-  // 一个舒服的阅读宽度。
-  @media (min-width: 1024px) {
-    width: 100%;
-    max-width: 36rem;
-    margin: 0 auto;
-    padding-top: 2.5rem;
-  }
+  padding: 2.5rem 1rem 1.5rem;
+  // 这个页面的内容（图标 + 标题 + 按钮 + 宝宝卡片）本来就是单列窄内容，
+  // 铺满宽屏会把「添加宝宝」拉成一条上千像素的长条。限宽居中，保持舒服的阅读宽度。
+  width: 100%;
+  max-width: 36rem;
+  margin: 0 auto;
 }
 
 // Centred spinner / skeleton placeholder shown while children are being fetched.
