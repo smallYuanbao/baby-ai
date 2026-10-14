@@ -9,7 +9,7 @@
  * speech-synthesis hook.
  */
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useChat } from '../../hooks/useChat';
 import { useSpeechSynthesis } from '../../hooks/useSpeechSynthesis';
 import { MessageList } from './MessageList';
@@ -64,23 +64,74 @@ export function ChatContainer() {
     return [];
   }, [messages]);
 
+  /** 是否至少问过一次（存在助手消息，含正在生成的那条占位）。 */
+  const hasAnswered = useMemo(
+    () => messages.some((m) => m.role === 'assistant'),
+    [messages],
+  );
+
+  /** 清空对话的二次确认是否展开。 */
+  const [confirmingClear, setConfirmingClear] = useState(false);
+
+  /** Esc 取消确认 —— 展开后不想清了，不该被迫去点「取消」。 */
+  useEffect(() => {
+    if (!confirmingClear) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') setConfirmingClear(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [confirmingClear]);
+
+  const handleConfirmClear = useCallback(() => {
+    clearChat();
+    setConfirmingClear(false);
+  }, [clearChat]);
+
   return (
     <div className={styles.wrapper}>
-      {/* 桌面:左聊天区 + 右引用面板;窄屏只显示聊天区(面板由 CSS 隐藏) */}
+      {/* 左：聊天区（工具栏 / 消息 / 输入）；右：引用面板 */}
       <div className={styles.chatColumn}>
       {/* ---- Clear-chat toolbar ---- */}
       {/* Only shown when there is at least one message to clear. */}
       {messages.length > 0 && (
         <div className={styles.toolbar}>
-          <button
-            onClick={clearChat}
-            className={styles.clearButton}
-          >
-            <svg className={styles.clearIcon} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-            清空对话
-          </button>
+          {confirmingClear ? (
+            // 二次确认。用就地展开而不是弹窗：对话只存在内存里，清掉不可撤销，
+            // 而且这个按钮还兼任「放弃正在生成的回答」，误点代价不小；
+            // 但弹窗要额外管焦点、遮罩和 Esc，成本高得多，就地确认够用了。
+            //
+            // 文案区分状态：正在生成时要说清「这会中止回答」，否则用户不知道
+            // 自己顺手把生成也掐了。
+            <div className={styles.confirmRow}>
+              <span className={styles.confirmText}>
+                {isStreaming ? '正在生成回答，确定中止并清空？' : '确定清空这段对话？'}
+              </span>
+              <button
+                onClick={handleConfirmClear}
+                className={styles.confirmYes}
+                autoFocus
+              >
+                确定清空
+              </button>
+              <button
+                onClick={() => setConfirmingClear(false)}
+                className={styles.confirmNo}
+              >
+                取消
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmingClear(true)}
+              className={styles.clearButton}
+            >
+              <svg className={styles.clearIcon} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              清空对话
+            </button>
+          )}
         </div>
       )}
 
@@ -110,7 +161,7 @@ export function ChatContainer() {
       />
       </div>
 
-      <ReferencePanel references={latestReferences} />
+      <ReferencePanel references={latestReferences} answered={hasAnswered} />
     </div>
   );
 }
