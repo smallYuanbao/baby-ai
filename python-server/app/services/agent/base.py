@@ -4,7 +4,7 @@ from typing import Optional
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from app.services.llm import call_deepseek, deepseek_client
+from app.services.llm import DEFAULT_MAX_TOKENS, call_deepseek, deepseek_client
 from app.services.tools import get_weather, WEATHER_TOOL
 from app.models.chat import ChatHistoryEntry, ChatMessage, Reference
 from app.services.chat_service import _build_messages
@@ -44,7 +44,7 @@ def agent_chat(user_message: str) -> str:
         messages=messages,
         tools=AVAILABLE_TOOLS,
         temperature=0.7,
-        max_tokens=500
+        max_tokens=DEFAULT_MAX_TOKENS
     )
     # 把 SDK 返回的 response 对象转成 dict，方便调试查看
     response_dict = {
@@ -110,7 +110,7 @@ def agent_chat(user_message: str) -> str:
             model="deepseek-v4-flash",
             messages=messages,
             temperature=0.7,
-            max_tokens=1000
+            max_tokens=DEFAULT_MAX_TOKENS
         )
 
         logger.debug("---- final_response ----\n%s", final_response)
@@ -149,7 +149,7 @@ def react_agent_chat(user_message: str):
             messages=messages,
             tools=AVAILABLE_TOOLS,
             temperature=0.7,
-            max_tokens=1000
+            max_tokens=DEFAULT_MAX_TOKENS
         )
 
         response_dict = {

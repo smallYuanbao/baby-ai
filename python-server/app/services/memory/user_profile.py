@@ -1,7 +1,7 @@
 import json
 
 from app.services.rag import chroma_client
-from app.services.llm import deepseek_client
+from app.services.llm import DEFAULT_MAX_TOKENS, deepseek_client
 from app.utils.logger import logger
 
 PROFILE_COLLECTION = "user_profiles"
@@ -41,7 +41,7 @@ JSON："""
         model="deepseek-v4-flash",
         messages=[{"role": "user", "content": prompt}],
         temperature=0,
-        max_tokens=200
+        max_tokens=DEFAULT_MAX_TOKENS
     )
     logger.debug("[用户档案] LLM 原始响应: finish=%s tokens=%s", resp.choices[0].finish_reason, resp.usage.completion_tokens if resp.usage else '?')
     try:

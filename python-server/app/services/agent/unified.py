@@ -4,7 +4,7 @@ from typing import Optional
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from app.services.llm import call_deepseek, deepseek_client
+from app.services.llm import DEFAULT_MAX_TOKENS, call_deepseek, deepseek_client
 from app.services.tools import get_weather, WEATHER_TOOL
 from app.models.chat import ChatHistoryEntry, ChatMessage, Reference
 from app.services.rag.retriever import hybrid_search
@@ -93,7 +93,7 @@ def check_and_call_tool(user_message: str, mcp_client: MCPClient):
             messages=messages,
             tools=tools,
             temperature=0.7,
-            max_tokens=1000
+            max_tokens=DEFAULT_MAX_TOKENS
         )
 
         finish_reason = response.choices[0].finish_reason
