@@ -9,12 +9,13 @@
  * speech-synthesis hook.
  */
 
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useChat } from '../../hooks/useChat';
 import { useSpeechSynthesis } from '../../hooks/useSpeechSynthesis';
 import { MessageList } from './MessageList';
 import { ChatInput } from '../input/ChatInput';
 import { ErrorBanner } from '../shared/ErrorBanner';
+import { ReferencePanel } from './ReferencePanel';
 import styles from './ChatContainer.module.less';
 
 /**
@@ -53,8 +54,20 @@ export function ChatContainer() {
     [ttsSupported, speak],
   );
 
+  // 右侧引用面板展示「最新一条带引用的助手回答」的来源。
+  // 倒着找:流式期间的中间态消息可能还没有 references,取最近一条有内容的。
+  const latestReferences = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role !== 'user' && m.references?.length) return m.references;
+    }
+    return [];
+  }, [messages]);
+
   return (
     <div className={styles.wrapper}>
+      {/* 桌面:左聊天区 + 右引用面板;窄屏只显示聊天区(面板由 CSS 隐藏) */}
+      <div className={styles.chatColumn}>
       {/* ---- Clear-chat toolbar ---- */}
       {/* Only shown when there is at least one message to clear. */}
       {messages.length > 0 && (
@@ -95,6 +108,9 @@ export function ChatContainer() {
         isStreaming={isStreaming}
         onStop={stopGenerating}
       />
+      </div>
+
+      <ReferencePanel references={latestReferences} />
     </div>
   );
 }

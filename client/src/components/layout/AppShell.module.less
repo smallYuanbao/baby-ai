@@ -14,16 +14,44 @@
 
 .wrapper {
   display: flex;
-  flex-direction: column;
+  flex-direction: column;      // 窄屏:内容在上、导航在底部
   height: 100dvh;              // dsvh avoids iOS Safari toolbar jank
-  max-width: 42rem;            // keeps chat / content line-length comfortable
-  margin: 0 auto;              // center on viewports wider than 42rem
+  max-width: 42rem;            // 窄屏/移动端:限制行宽,居中
+  margin: 0 auto;
   background: @white;
-  box-shadow: @shadow-sm;      // subtle separation from the body background
+  box-shadow: @shadow-sm;
+
+  @media (min-width: 1024px) {
+    flex-direction: row;       // 桌面:导航变左侧侧栏,内容占右侧
+    max-width: none;           // 桌面铺满,不再限制成手机宽度
+    margin: 0;
+    box-shadow: none;
+  }
 }
 
-// ── Main content area ───────────────────────────────────────────────────────
-// Flex child that fills remaining vertical space and scrolls independently.
+// 导航槽:窄屏在底部(order 2),桌面在左侧(order 1)
+.navSlot {
+  order: 2;
+
+  @media (min-width: 1024px) {
+    order: 1;
+    flex-shrink: 0;
+  }
+}
+
+// 内容列:Header + main,竖向堆叠
+.content {
+  flex: 1;
+  order: 1;
+  min-width: 0;                // 允许在桌面 flex row 内收缩
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+
+  @media (min-width: 1024px) {
+    order: 2;
+  }
+}
 
 .main {
   flex: 1;                     // consume all space not taken by header/footer
@@ -31,3 +59,5 @@
   display: flex;
   flex-direction: column;      // allows children (e.g. message list) to stack
 }
+
+// 导航槽在桌面的宽度由 TabBar 的 .nav 决定(8.5rem),这里不用重复设

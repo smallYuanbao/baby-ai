@@ -1,0 +1,65 @@
+@import '../../styles/variables.less';
+
+// ============================================================
+//  ReferencePanel — 右侧引用面板(桌面三栏的第三栏)
+//
+//  只在 ≥1024px 显示。窄屏隐藏,改由聊天气泡内的折叠列表承载。
+//  与聊天区之间用 1px 分隔线,背景略深于主区,形成「附属信息」的层级。
+// ============================================================
+
+.panel {
+  display: none;              // 默认(窄屏)隐藏,由媒体查询在桌面打开
+  flex-direction: column;
+  width: 20rem;               // 320px:够放卡片标题 + 分数徽章
+  flex-shrink: 0;             // 不随聊天区变窄
+  border-left: 1px solid @primary-50;
+  background: @surface-light; // 比聊天区的白更暖一点,区分层级
+  overflow: hidden;           // 滚交给内部 .list
+}
+
+@media (min-width: 1024px) {
+  .panel {
+    display: flex;
+  }
+}
+
+// ── 标题行 ──────────────────────────────────────────────────────
+.head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid @primary-50;
+}
+
+.title {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: @gray-700;
+}
+
+.count {
+  font-size: 0.75rem;
+  color: @gray-400;
+}
+
+// ── 空态 ────────────────────────────────────────────────────────
+.empty {
+  margin: 0;
+  padding: 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  color: @gray-400;
+}
+
+// ── 引用列表(自己滚,不带动外层) ──────────────────────────────────
+.list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}

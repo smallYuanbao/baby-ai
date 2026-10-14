@@ -30,12 +30,30 @@
   display: flex;
   border-top: 1px solid @primary-50; // subtle brand-tinted divider from content
   background: @white;
+
+  // 桌面:同一块 DOM 从「底部横栏」变成「左侧竖栏」——
+  // 位置由 AppShell 的 order 控制,这里只负责内部方向与分隔线换边。
+  @media (min-width: 1024px) {
+    flex-direction: column;
+    width: 8.5rem;                     // 136px:够放「聊天 / 成长 / 玩乐」三行
+    height: 100%;
+    padding-top: 1rem;
+    border-top: none;
+    border-right: 1px solid @primary-50;
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Layout: Individual tab button
 // ---------------------------------------------------------------------------
 .tab {
+  // 清掉 <button> 的浏览器默认外观(灰底 + 描边 + 系统字体)。
+  // 全局样式没有做按钮 reset,不清的话每个 tab 会自带一个灰色方框。
+  appearance: none;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: inherit;
   flex: 1; // equal-width tabs — each takes the same horizontal space
   display: flex;
   flex-direction: column;
@@ -100,4 +118,31 @@
   height: @space-0d5; // 2px — thin underline accent
   background: @primary-500; // matches the active brand colour
   border-radius: @radius-full; // pill shape — soft rounded ends
+}
+
+// ---------------------------------------------------------------------------
+// 桌面:侧栏形态
+// ---------------------------------------------------------------------------
+// 同一块 DOM,只改「内部方向」与「指示条朝向」——位置(左/底)由 AppShell 的 order 决定。
+@media (min-width: 1024px) {
+  .tab {
+    flex: 0 0 auto;              // 侧栏项按自然高度排列,不像底部栏那样等分撑满
+    flex-direction: row;         // 图标在左、文字在右
+    justify-content: flex-start;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.625rem 1rem;
+    position: relative;          // 给左侧指示条做定位父级
+    border-radius: 0 @radius-xl @radius-xl 0; // 贴左边,右侧圆角
+  }
+
+  // 指示条:从「文字下方的细横线」变成「贴左侧的短竖条」
+  .indicator {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: @space-0d5;           // 2px 宽
+    height: 1.25rem;             // 20px 高
+  }
 }

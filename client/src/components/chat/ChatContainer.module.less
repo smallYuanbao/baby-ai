@@ -17,8 +17,24 @@
 .wrapper {
   flex: 1;               // absorb all leftover space inside the parent flex container
   display: flex;
-  flex-direction: column;
+  flex-direction: column; // 窄屏:只有聊天区一栏
   overflow: hidden;      // clip child content; individual children handle their own scrolling
+}
+
+// 桌面:横排成「聊天区 + 引用面板」两栏(外层侧栏由 AppShell 提供,合起来是三栏)
+@media (min-width: 1024px) {
+  .wrapper {
+    flex-direction: row;
+  }
+}
+
+// 聊天区:竖向堆叠(工具栏/消息/输入),自己占满剩余宽度
+.chatColumn {
+  flex: 1;
+  min-width: 0;          // 允许在 flex 行内收缩,否则长内容会把面板挤出去
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 // ---------------------------------------------------------------------------
