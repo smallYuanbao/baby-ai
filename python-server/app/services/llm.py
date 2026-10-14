@@ -40,6 +40,14 @@ breaker = CircuitBreaker(
 # 降级兜底文案（不暴露内部错误）
 FALLBACK_TEXT = "抱歉，当前服务繁忙，请稍后再试～"
 
+# 默认输出预算。**必须按「推理模型」来定**:
+# deepseek-v4-flash 是推理模型,会先输出 reasoning_content(思维链)再输出 content,
+# 两者**共用** max_tokens。原值 1000 是给非推理模型定的——真实 RAG prompt(约 3000 字符证据)
+# 下思维链本身就要 1000+ token,预算被吃光 → content 为空、finish_reason=length。
+# 实测:16 条评测样本里 5 条(31%)因此拿到空回答,再连锁污染缓存与会话历史。
+# 4096 给思维链和正式回答都留出余量。
+DEFAULT_MAX_TOKENS = 4096
+
 
 def _fallback_answer() -> str:
     """熔断/调用失败时的降级兜底：保证「有响应」，不暴露内部错误"""
@@ -60,7 +68,7 @@ def _call_deepseek_raw(messages: list[ChatMessage], options: ChatOptions, stream
         model=options.model or DEEPSEEK_MODEL,
         messages=[{"role": m.role, "content": m.content} for m in messages],
         temperature=options.temperature if options.temperature is not None else 0.7,
-        max_tokens=options.maxTokens if options.maxTokens is not None else 1000,
+        max_tokens=options.maxTokens if options.maxTokens is not None else DEFAULT_MAX_TOKENS,
         stream=stream,
     )
 
@@ -112,7 +120,7 @@ def generate_stream(
         model=opts.model or DEEPSEEK_MODEL,
         messages=[{"role": m.role, "content": m.content} for m in messages],
         temperature=opts.temperature if opts.temperature is not None else 0.7,
-        max_tokens=opts.maxTokens if opts.maxTokens is not None else 1000,
+        max_tokens=options.maxTokens if options.maxTokens is not None else DEFAULT_MAX_TOKENS,
         stream=True,
     )
     for chunk in stream:
@@ -142,7 +150,7 @@ async def generate_stream_with_interrupt_and_fallback(
             model=opts.model or DEEPSEEK_MODEL,
             messages=[{"role": m.role, "content": m.content} for m in messages],
             temperature=opts.temperature if opts.temperature is not None else 0.7,
-            max_tokens=opts.maxTokens if opts.maxTokens is not None else 1000,
+            max_tokens=options.maxTokens if options.maxTokens is not None else DEFAULT_MAX_TOKENS,
             stream=True,
         )
 
