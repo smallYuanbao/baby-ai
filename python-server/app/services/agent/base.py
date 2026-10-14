@@ -28,6 +28,34 @@ TOOL_MAP = {
     "get_weather": get_weather
 }
 
+def _run_tool(tool_name: str, raw_args: str) -> dict:
+    """执行 LLM 请求的工具调用。
+
+    **三件事都是 LLM 的常见行为,不是边界情况**,所以要防:
+      · 工具名幻觉 —— 模型可能报一个不存在的工具,直接 TOOL_MAP[name] 会 KeyError;
+      · 参数非法 JSON —— 模型可能返回截断/多带文字的 arguments;
+      · 参数不匹配 —— 字段名或类型不对。
+
+    出错时**不抛异常**,而是把错误作为「工具返回」还给模型,
+    让它自己纠正或改用别的方式回答——这是 Agent 的正确姿势,
+    比让整个请求 500 好(模型看到错误往往能自愈,且受 MAX_STEPS 约束不会无限循环)。
+    """
+    func = TOOL_MAP.get(tool_name)
+    if func is None:
+        logger.warning("[工具] 模型请求了不存在的工具: %s", tool_name)
+        return {"error": f"工具 {tool_name} 不存在,可用工具: {list(TOOL_MAP)}"}
+    try:
+        args = json.loads(raw_args or "{}")
+    except json.JSONDecodeError as e:
+        logger.warning("[工具] 参数不是合法 JSON: %r (%s)", raw_args, e)
+        return {"error": f"参数不是合法 JSON,请重新给出: {raw_args!r}"}
+    try:
+        return func(**args)
+    except Exception as e:      # 工具本身失败也不该拖垮整个请求,交给模型决定下一步
+        logger.warning("[工具] 执行失败: %s(%s) -> %s", tool_name, args, e)
+        return {"error": f"工具 {tool_name} 执行失败: {e}"}
+
+
 def agent_chat(user_message: str) -> str:
     """
     Agent 决策循环：
@@ -83,13 +111,7 @@ def agent_chat(user_message: str) -> str:
         # LLM 说"我需要调工具"，拿到工具调用信息
         tool_call = response.choices[0].message.tool_calls[0]
         tool_name = tool_call.function.name
-        tool_args = json.loads(tool_call.function.arguments)
-
-        logger.debug("-----  tool_args -----\n%s", tool_args)
-
-        # 执行工具
-        tool_func = TOOL_MAP[tool_name]
-        tool_result = tool_func(**tool_args)
+        tool_result = _run_tool(tool_name, tool_call.function.arguments)
 
         logger.debug("---- tool_result ----\n%s", tool_result)
 
@@ -190,13 +212,7 @@ def react_agent_chat(user_message: str):
             # LLM 说"我需要调工具"，拿到工具调用信息
             tool_call = response.choices[0].message.tool_calls[0]
             tool_name = tool_call.function.name
-            tool_args = json.loads(tool_call.function.arguments)
-
-            logger.debug("-----  tool_args -----\n%s", tool_args)
-
-            # 执行工具
-            tool_func = TOOL_MAP[tool_name]
-            tool_result = tool_func(**tool_args)
+            tool_result = _run_tool(tool_name, tool_call.function.arguments)
 
             logger.debug("---- tool_result ----\n%s", tool_result)
 
