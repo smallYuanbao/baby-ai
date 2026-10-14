@@ -54,6 +54,50 @@ body {
 }
 
 // ============================================================
+//  Base — box-sizing
+// ============================================================
+// Chrome 的 UA 样式表只给 button / input / select 设了 border-box，**漏掉了
+// textarea**，其余元素一概按 content-box 算。于是 `width: 100%` 再叠加
+// padding + border 就会比容器宽出那一圈。
+//
+// 实测症状：聊天输入框 (.textarea) 设了 width:100%，同时又吃 10px/16px 内边距
+// 和 1px 边框 → 实际比父容器宽 34px，右端直接钻到发送按钮底下，看起来像
+// 「发送按钮和输入框重叠」。统一成 border-box 后，width 就是含边框和内边距的
+// 总宽，这类溢出从根上消失。
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+// ============================================================
+//  Base — form controls
+// ============================================================
+// 浏览器给 button / input / select / textarea 都带了一套默认外观：
+// 灰底(buttonface)、2px outset 黑边、1px 6px 内边距、系统字体。
+// 各组件的 CSS Modules 只设了它想改的那几项，**没设到的就漏出浏览器默认样式**——
+// 所以底部的文件/语音按钮是灰底加黑边、成长页的「添加宝宝」是黑边框。
+//
+// 这里统一清干净，最终长相完全交给组件自己的样式决定。
+// 注意：不给 select 清 appearance —— 项目里有 4 个原生 <select>（用户切换、
+// 成长表单、宝宝说），一律抹掉会让它们全部丢掉下拉箭头。
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+// ============================================================
 //  Scrollbar — Custom Webkit scrollbar styling
 // ============================================================
 //  Replaces the default browser scrollbar with a subtle, branded version.

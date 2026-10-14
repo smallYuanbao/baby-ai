@@ -107,13 +107,23 @@
 .userSwitcher {
   margin-left: auto;              // push to the far right of the header bar
   font-size: @text-xs;            // 12px — compact, secondary to the title
-  padding: @space-1d5 @space-3;   // 6px vertical, 12px horizontal
+  // 右侧多留出 24px 给自绘箭头，否则箭头会压在圆角边框上
+  padding: @space-1d5 @space-6 @space-1d5 @space-3;
   border: 1px solid @primary-200; // light orange border ties into brand
   border-radius: @radius-xl;      // 16px — matches input/button convention
-  background: @white;
   color: @gray-700;
   cursor: pointer;
   outline: none;
+
+  // 原生 <select> 的箭头是浏览器自绘的，它不知道我们设了 16px 圆角和 12px 内边距，
+  // 于是直接压在右边框上（箭头和边框叠在一起）。
+  // 清掉 appearance 自己画一个，位置和大小就完全可控了。
+  appearance: none;
+  background-color: @white;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2012%2012'%20fill='none'%20stroke='%239ca3af'%20stroke-width='1.6'%20stroke-linecap='round'%3E%3Cpath%20d='M3%204.5L6%207.5L9%204.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right @space-2 center;
+  background-size: 0.75rem;
 
   &:focus {
     border-color: @primary-400;   // deepen border on focus for affordance
