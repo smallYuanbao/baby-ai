@@ -54,8 +54,8 @@ export function ReferenceList({ references }: ReferenceListProps) {
       {/* Reference list body — only rendered when the panel is expanded. */}
       {isOpen && (
         <div className={`${styles.referenceList} animate-fade-in`}>
-          {references.map((ref) => (
-            <ReferenceCard key={ref.id} reference={ref} />
+          {references.map((ref, i) => (
+            <ReferenceCard key={ref.id} reference={ref} index={i + 1} />
           ))}
         </div>
       )}

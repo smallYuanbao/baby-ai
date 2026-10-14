@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { api } from '../services/api';
 import { useSSE } from './useSSE';
 import type { Message } from '../types/chat';
+import { normalizeReferences } from '../utils/reference';
 
 /**
  * @file useChat.ts — Core chat conversation hook
@@ -239,12 +240,10 @@ export function useChat() {
 
           // --- Source references ---
           // The SSE endpoint may emit a references event with cited sources.
-          // Normalise the payload (array or {references: [...]}) and attach.
+          // 后端给的是 {id, text, score}，这里归一化成卡片要的
+          // {id, title, snippet, score}（见 utils/reference.ts）。
           onReferences: (references: unknown) => {
-            // useSSE may deliver the raw event data; handle both shapes
-            const refs = Array.isArray(references)
-              ? references
-              : (references as any)?.references || [];
+            const refs = normalizeReferences(references);
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === aiMessageId ? { ...m, references: refs } : m,
@@ -405,10 +404,12 @@ export function useChat() {
       tokenTimerRef.current = null;
     }
     flushTokenBatch();
-    // Finalise the streaming message: keep its content, clear the streaming flag.
+    // Finalise the streaming message: keep whatever content arrived, clear the
+    // streaming flag, and mark it as stopped so the bubble can say so instead
+    // of silently looking like a finished (or blank) answer.
     setMessages((prev) =>
       prev.map((m) =>
-        m.id === streamingMsgIdRef.current ? { ...m, isStreaming: false } : m,
+        m.id === streamingMsgIdRef.current ? { ...m, isStreaming: false, stopped: true } : m,
       ),
     );
     // Release the send lock.

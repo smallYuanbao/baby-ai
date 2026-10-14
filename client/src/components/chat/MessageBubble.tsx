@@ -86,11 +86,20 @@ export const MessageBubble = memo(function MessageBubble({
               {message.content}
               <span className={styles.streamingCursor} />
             </p>
+          ) : message.stopped && !message.content ? (
+            // 点了「停止生成」且一个字都没收到 —— 渲染空 Markdown 会留下一个
+            // 空白气泡，看起来像界面坏了。直接给一句说明。
+            <p className={styles.stoppedText}>已停止生成</p>
           ) : (
-            // 流式结束后：完整 Markdown 渲染（GFM）
-            <div className={`markdown-content ${styles.markdownBody}`}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
-            </div>
+            <>
+              {/* 流式结束后：完整 Markdown 渲染（GFM） */}
+              <div className={`markdown-content ${styles.markdownBody}`}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+              </div>
+              {/* 答到一半被中断：必须显式标出来。育儿/医疗建议被截断后，
+                  看上去和一条完整结论没有区别，容易误导。 */}
+              {message.stopped && <p className={styles.stoppedText}>已停止生成</p>}
+            </>
           )}
 
           {/* 错误提示：仅当 message.error 非空时渲染 */}

@@ -41,6 +41,15 @@ export interface Message {
    */
   isStreaming: boolean;
 
+  /**
+   * 这条回答是被用户「停止生成」中断的（而非正常答完）。
+   *
+   * 存在的意义是区分「答完了」和「答到一半被掐断」——后者在育儿/医疗这类
+   * 场景里必须显式告诉用户，否则一段被截断的建议看起来像完整结论。
+   * 停止时一个字都没收到的情况下，也靠它避免渲染出一个空白气泡。
+   */
+  stopped?: boolean;
+
   /** Unix-epoch millisecond timestamp of when the message was created. */
   timestamp: number;
 
@@ -82,13 +91,13 @@ export interface ChatSession {
 /**
  * A knowledge-base reference (RAG citation) returned with an assistant answer.
  *
- * @description When the backend retrieves supporting documents, it returns one
- *              or more `Reference` objects. The `score` field (0–1) represents
- *              the relevance ranking assigned by the retrieval model.
+ * @description 这是**给界面用的视图模型**，不是接口原样返回的形状 ——
+ *              后端只给 `{id, text, score}`，标题和摘要要从 `text` 里拆出来。
+ *              转换发生在 `utils/reference.ts` 的 `normalizeReferences`。
  */
 export interface Reference {
-  /** Numeric identifier of the referenced document chunk. */
-  id: number;
+  /** 知识库分块 ID（如 `med_32ce4015`）；只用作 React key，不直接展示。 */
+  id: string;
 
   /** Title of the source document. */
   title: string;
@@ -97,10 +106,11 @@ export interface Reference {
   snippet: string;
 
   /**
-   * Relevance score between 0 (irrelevant) and 1 (perfect match).
-   * Used by the UI to sort / threshold displayed citations.
+   * 相关性分数，0（不相关）~ 1（完全匹配）。
+   * 由精排阶段给出；精排缺席时（如工具调用产生的合成引用）为 `undefined`，
+   * 此时界面不显示分数徽章，而不是显示一个假的 0。
    */
-  score: number;
+  score?: number;
 }
 
 /**

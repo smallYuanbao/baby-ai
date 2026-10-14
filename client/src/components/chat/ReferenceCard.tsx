@@ -26,6 +26,13 @@ import styles from './ReferenceCard.module.less';
 interface ReferenceCardProps {
   /** The RAG reference to render — sourced from an assistant {@link Message}. */
   reference: Reference;
+  /**
+   * 该引用在列表中的序号（从 1 开始），显示在左侧徽章里。
+   *
+   * 不用 `reference.id`：那是 ChromaDB 的分块 ID（形如 `med_32ce4015`），
+   * 又长又没有阅读意义，塞进 24px 的方块里会被挤爆。
+   */
+  index: number;
 }
 
 /**
@@ -38,12 +45,12 @@ interface ReferenceCardProps {
  * @param props - Component props (see {@link ReferenceCardProps}).
  * @returns A styled citation card element.
  */
-export function ReferenceCard({ reference }: ReferenceCardProps) {
+export function ReferenceCard({ reference, index }: ReferenceCardProps) {
   return (
     <div className={styles.card}>
       {/* Reference number badge — uses the brand primary colour as background */}
       <span className={styles.badge}>
-        {reference.id}
+        {index}
       </span>
 
       {/* Body: title row with score badge, then clipped snippet */}
@@ -53,8 +60,9 @@ export function ReferenceCard({ reference }: ReferenceCardProps) {
           <h4 className={styles.title}>
             {reference.title}
           </h4>
-          {/* ScoreBadge visualises the 0–1 relevance score as a colour-coded label */}
-          <ScoreBadge score={reference.score} />
+          {/* ScoreBadge visualises the 0–1 relevance score as a colour-coded label.
+              精排缺失时 score 为 undefined，此时宁可不显示，也不显示一个假的分数。 */}
+          {reference.score !== undefined && <ScoreBadge score={reference.score} />}
         </div>
         {/* Snippet is clamped to 2 lines via -webkit-line-clamp */}
         <p className={styles.snippet}>
