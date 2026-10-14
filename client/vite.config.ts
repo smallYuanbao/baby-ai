@@ -71,7 +71,9 @@ export default defineConfig({
          * Backend API server base URL.
          * All requests whose path starts with `/api` are forwarded here.
          */
-        target: 'http://localhost:8002',
+        // 目标可配:BACKEND_URL 环境变量优先。
+        // 原来硬编码 8002,和同机其他项目的后端端口会撞车(本地同时跑多个项目时很常见)。
+        target: process.env.BACKEND_URL || 'http://localhost:8002',
 
         /**
          * Changes the `Origin` header of the proxied request to match the

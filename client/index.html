@@ -5,8 +5,13 @@
  * @description
  * This is the single HTML entry point for the Baby AI single-page application (SPA).
  * It defines the minimal shell that bootstraps the React application:
- *  1. <head> — Metadata, viewport configuration, font preloading, and SEO tags.
- *  2. <body> — An empty mount point (<div id="root">) and the module script that loads React.
+ *  1. head 段 — Metadata, viewport configuration, font preloading, and SEO tags.
+ *  2. body 段 — An empty mount point (div id="root") and the module script that loads React.
+ *
+ * NOTE: 本注释里**不能出现真正的标签字面量**(如 head 标签)。
+ * Vite 的 @vitejs/plugin-react 靠「找 head 标签」决定往哪注入 React Refresh 的 preamble,
+ * 注释里若先出现一个 head 标签,脚本会被注进注释内部 → 浏览器报
+ *   "can't detect preamble. Something is wrong." 且页面白屏。
  *
  * @role
  * This file is NOT a template. It contains no server-side includes or build-time
