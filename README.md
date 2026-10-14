@@ -504,6 +504,19 @@ baby-ai/
       → done 后: <ReactMarkdown> ✅ 只解析一次
 ```
 
+## 踩坑记录
+
+开发过程中踩过的坑，按「现象 → 根因 → 修法 → 原理」记，附实测数据与 git 溯源：
+
+| 分类 | 内容 |
+|------|------|
+| [推理模型与输出预算](docs/pitfalls/reasoning-model-budget.md) | 改常量时改错变量致流式全挂；三处小 `max_tokens` 静默失效；预算该按什么定 |
+| [异步接口里的阻塞与取消](docs/pitfalls/async-blocking.md) | `async def` 里跑同步代码堵死全服务 38 秒；“停止生成”停不掉检索 |
+| [前后端数据契约](docs/pitfalls/data-contract.md) | 引用字段两端从未对齐；精排降级后分数恒为 1.0 |
+| [性能瓶颈与环境配置](docs/pitfalls/perf-and-env.md) | 一轮对话 54 秒、瓶颈在精排；Node 14 下 npm 递归派生 301 个进程 |
+
+→ [总览与速查](docs/pitfalls/index.md)
+
 ## 待实现功能
 
 | 功能 | 状态 | 说明 |
@@ -512,7 +525,7 @@ baby-ai/
 | **用户认证系统** | 🟡 部分 | 方案 A 已打通「应用层鉴权 + 多租户隔离」（API Key → user_id，全查询 `WHERE user_id=?` 过滤，见 `app/core/auth.py`）；完整的登录/注册 + JWT 签发刷新待补 |
 | **对话持久化存储** | ✅ 已实现 | 会话历史已落盘 SQLite（`data/sessions.db`），服务重启不丢，按 `user_id + session_id` 隔离，保留最近 10 轮 |
 | **跨会话记忆** | ✅ 已实现 | LLM 提取关键信息（宝宝月龄、过敏史、关注主题）→ 灌入长期记忆库 → 新会话检索注入（`app/services/memory/user_profile.py`） |
-| **自动化测试** | 🟡 部分 | 后端 pytest 已覆盖 47 例（growth/play/cache/熔断/session 持久化等）；前端 Vitest 待补 |
+| **自动化测试** | 🟡 部分 | 后端 pytest 已覆盖 62 例（growth/play/cache/熔断/session 持久化/流式预算与取消等）；前端 Vitest 待补 |
 | **移动端适配** | 🟡 中 | 前端当前以桌面端为主，移动端仅在 `index.html` 设置了 viewport，部分组件在窄屏下体验待优化 |
 | **多语言支持** | 🟢 低 | 目前仅支持中文，包括 UI 文案和 AI 回复。后续可通过 i18n 扩展英文等多语言 |
 
