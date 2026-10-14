@@ -7,7 +7,7 @@ from app.models.chat import ChatHistoryEntry, ChatMessage, Reference
 
 from app.services.rag.retriever import hybrid_search, hybrid_search_rrf, search_by_file
 from app.services.prompt import buildPromptTest
-from app.services.llm import call_deepseek, generate_stream_with_interrupt_and_fallback
+from app.services.llm import FALLBACK_TEXT, call_deepseek, generate_stream_with_interrupt_and_fallback
 from app.services.pipeline.rewrite import rewrite_query
 from app.services.pipeline.intent import IntentResult, route_intent
 from app.services.pipeline.session import add_assitant_message, add_user_message, get_history
@@ -151,6 +151,19 @@ def get_rag_context(
 
 
 
+def _is_cacheable(answer: str | None) -> bool:
+    """这个回答值不值得进缓存。
+
+    **只缓存「真的答出来了」的结果**,两类例外:
+      ① 空回答 —— 上游返回空(超时/异常/空内容),缓存后所有相同提问都命中这条空答案;
+      ② 降级兜底文案 —— call_deepseek 内部失败时不抛异常,而是返回 FALLBACK_TEXT,
+         它同样非空,光判空拦不住。一次偶发失败会把「服务繁忙」永久缓存给这个问题。
+
+    两者都不会自愈:服务不重启就一直错下去。(实测:3/16 条空回答 + 2/9 条兜底文案。)
+    """
+    return bool((answer or "").strip()) and answer != FALLBACK_TEXT
+
+
 def execute_rag_pipeline(
     user_message: str,
     session_id: str,
@@ -167,13 +180,10 @@ def execute_rag_pipeline(
     answer = answer_cache.get(cache_key) if can_cache_answer else None
     if answer is None:
         answer = call_deepseek(messages)
-        # **空回答不缓存**：上游返回空（超时/异常/空内容）时若把它写进缓存，
-        # 之后**所有相同的提问都会命中这条空答案**，且不会自愈——服务不重启就一直错下去。
-        # （实测过：3/16 条样本回答为空,重启服务后同样的提问立刻恢复正常。）
-        if can_cache_answer and (answer or "").strip():
+        if can_cache_answer and _is_cacheable(answer):
             answer_cache.set(cache_key, answer)
         elif can_cache_answer:
-            logger.warning("[缓存] 上游返回空回答,跳过缓存: %s", cache_key)
+            logger.warning("[缓存] 回答为空或来自降级兜底,跳过缓存: %s", cache_key)
     else:
         logger.info("[缓存] 答案命中: %s", cache_key)
 

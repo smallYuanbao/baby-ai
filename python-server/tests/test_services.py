@@ -22,3 +22,19 @@ def test_query_rewrite_detects_pronoun():
 
     assert result.wasRewritten
     assert "宝宝" in result.rewrittenQuery
+
+# —— 缓存准入:只有「真的答出来了」才进缓存 ——
+
+def test_cacheable_rejects_empty_and_fallback():
+    """空回答和降级兜底都不该进缓存 —— 否则一次偶发失败会被永久缓存给那个问题。
+
+    实测踩过:3/16 条空回答 + 2/9 条「服务繁忙」兜底文案,且服务不重启不会自愈。
+    """
+    from app.services.chat_service import _is_cacheable
+    from app.services.llm import FALLBACK_TEXT
+
+    assert _is_cacheable("宝宝发烧可以物理降温") is True
+    assert _is_cacheable("") is False
+    assert _is_cacheable("   ") is False
+    assert _is_cacheable(None) is False
+    assert _is_cacheable(FALLBACK_TEXT) is False   # 非空,但光判空拦不住
