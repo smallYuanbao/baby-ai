@@ -8,7 +8,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.models.chat import ChatHistoryEntry, ChatMessage, Reference
 
-from app.services.rag.retriever import hybrid_search, hybrid_search_rrf, search_by_file
+from app.services.rag.retriever import hybrid_search_rrf, search_by_file
 from app.services.prompt import buildPromptTest
 from app.services.llm import FALLBACK_TEXT, call_deepseek, generate_stream_with_interrupt_and_fallback
 from app.services.pipeline.rewrite import rewrite_query
@@ -146,8 +146,13 @@ def get_rag_context(
     # 答案缓存只在无历史时启用 —— 多轮追问「那怎么办」答案依赖上下文，不能缓存
     can_cache_answer = not history
 
-    # 4. RAG 检索（后）— emergency 跳过
-    if intent_result.intent == "emergency":
+    # 4. RAG 检索（后）— emergency 和 off_topic 都跳过
+    #
+    # off_topic 跳过检索不只是为了「反正也搜不到」：实测问「你是谁」时混合检索会正常
+    # 跑完 BM25 + BGE 精排（单次精排 24 秒），拿回 5 篇分数清一色 0.0 的文档，
+    # 再被相关性门控丢掉 —— 整条最贵的链路白跑一遍。既然意图已经判定与育儿无关，
+    # 直接不进这条路。
+    if intent_result.intent in ("emergency", "off_topic"):
         context_docs = []
         references = []
     else:
@@ -159,11 +164,11 @@ def get_rag_context(
             context_docs = [r.text for r in references]
             logger.info("[缓存] 检索结果命中: %s", cache_key)
         else:
-            results = hybrid_search(message, alpha=0.7, top_k=10)
+            # RRF 排名融合。原来走的是线性加权（alpha=0.7），但稠密分和稀疏分的量纲
+            # 本来就不可比，加权前得各自归一化，而归一化方式本身又是一个要调的超参。
+            # RRF 只用「排名」不用「分数」，省掉这一层，且对异常分更稳。
+            results = hybrid_search_rrf(message, top_k=10)
             checkpoint("混合检索")
-
-            # RRF 混合检索 → 多召回一些候选
-            # results = hybrid_search_rrf(message, top_k=10)
 
             # 精排：BGE → DeepSeek → 原始距离排序（DeepSeek 兜底时会调 LLM）
             ranked_result = rerank(message, results, top_k=5)
@@ -189,14 +194,26 @@ def get_rag_context(
             #   完全无关（你是谁 / 今天天气怎么样）→ 0.0 / 0.0 / 0.0 / 0.0 / 0.0
             #   真问题（宝宝发烧了怎么办）        → 0.96 / 0.41 / 0.14 / 0.06 / 0.03
             # 只看 top1：真问题的低分候选本来就排在第 3~5 位，用「全部分数都低」判会误伤。
+            #
             # default=0.0：知识库为空时 rankedDocuments 是空列表，裸写 max() 会抛
             # ValueError（max() arg is an empty sequence）—— 空库应当走"无相关内容"
             # 这条分支，而不是让整个请求 500。
+            #
+            # **只在 tier == "bge" 时做这个判断**：只有 BGE 的分数是绝对相关性。
+            # 其余 tier（LLM 排序 / 距离兜底 / 粗排直通）的 score 都是相对值且 top1
+            # 恒为 1.0，拿它们跟阈值比会**永远通过**——门控看着在跑，实际完全失效。
+            tier = ranked_result.get("tier")
             top_score = max(
                 (d.get("score") or 0.0 for d in ranked_result["rankedDocuments"]),
                 default=0.0,
             )
-            if top_score < RAG_MIN_TOP_SCORE:
+            if tier != "bge":
+                logger.warning(
+                    "[检索] 精排降级为 %s，分数不是绝对相关性，相关性门控本次跳过"
+                    "（最高分 %.3f 仅供参考）",
+                    tier, top_score,
+                )
+            elif top_score < RAG_MIN_TOP_SCORE:
                 logger.info(
                     "[检索] 最高相关性仅 %.3f（阈值 %.2f），判定知识库无相关内容：%s",
                     top_score, RAG_MIN_TOP_SCORE, message,
