@@ -33,7 +33,7 @@ from typing import Optional
 
 from app.core.config import RERANKER_URL
 from app.models.chat import ChatMessage, ChatOptions, RAGDocument
-from app.services.llm import DEFAULT_MAX_TOKENS, call_deepseek
+from app.services.llm import RERANK_MAX_TOKENS, call_deepseek
 from app.utils.logger import logger
 
 
@@ -223,14 +223,16 @@ def rerank_with_llm(query: str, docs: list[RAGDocument], top_k: int):
     # （短 prompt 下勉强能过，实测用掉 43），但真实精排 prompt 下思维链会把额度
     # 烧光 → content 为空 → 整层 LLM 精排静默退化成「按向量距离排序」，等于没精排。
     #
-    # 也别套用 SHORT_TASK_MAX_TOKENS：那档是给「输出一个词」的意图分类用的。
-    # 精排虽然也只输出几个数字，却要模型读完十几篇候选再比对，思维链长度方差很大
-    # （实测 1100～2700+ 字符，1024 都还被截断过），直接给默认预算。
+    # 预算用 **RERANK_MAX_TOKENS**（专用档），两个坑都要避开：
+    #   - 别套 SHORT_TASK_MAX_TOKENS：那档是给「输出一个词」的意图分类用的；
+    #   - 也别套 DEFAULT_MAX_TOKENS：主回答的预算是按主回答量的，精排吃得多得多。
+    # 实测精排 completion_tokens 中位 1445、峰值 5508（5 个真实查询）—— 中位和峰值
+    # 差 3.8 倍，个别查询会突然"想很久"。
     messages = [ChatMessage(
         role="user",
         content=f"从下列文档中选出与查询最相关的 {top_k} 条，每行输出一个编号（只输出数字）：\n\n查询：{query}\n\n{doc_list_text}",
     )]
-    options = ChatOptions(temperature=0, maxTokens=DEFAULT_MAX_TOKENS)
+    options = ChatOptions(temperature=0, maxTokens=RERANK_MAX_TOKENS)
     content = call_deepseek(messages, options)
 
     # ============================================================
@@ -344,8 +346,21 @@ def rerank(query: str, docs: list[RAGDocument], top_k: int):
         top_k:  最终保留多少条文档
 
     Returns:
-        {"query": query, "rankedDocuments": [...]}
-        其中每个文档都是 dict，已附加 score 字段（0~1）
+        {"query": query, "rankedDocuments": [...], "tier": "<见下>"}
+        其中每个文档都是 dict，已附加 score 字段（0~1）。
+
+        **tier 是"这个 score 能信几分"的显式契约**，调用方必须看它：
+
+          - "bge"        ：BGE cross-encoder 把 (query, doc) 成对读原文打的分，
+                           **唯一的绝对相关性** —— 0.0 就是真的不相关。
+                           检索相关性门控只应在这个 tier 下启用。
+          - "llm"        ：LLM 只给了顺序，score 是 `1 - 排名/top_k` **编出来的**。
+          - "distance"   ：连 LLM 都失败，按粗排分排序。
+          - "passthrough"：候选数本来就不多于 top_k，直接沿用粗排分。
+
+        后三种的 score 是**相对值**，它们的 top1 恒为 1.0，**拿去做阈值判断会永远通过**。
+        原来的代码没有这个字段，门控只能靠"粗排取 10 > 精排留 5"这种数量关系
+        侥幸避开 passthrough —— 一旦有人把两个数字改成相等，门控就会静默失效。
     """
     # ============================================================
     # 短路优化：文档数 ≤ top_k 时，不需要精排
@@ -357,13 +372,14 @@ def rerank(query: str, docs: list[RAGDocument], top_k: int):
             # d.model_dump() 把 Pydantic 模型转成 dict
             # {**dict, "score": ...} 再追加 score 字段
             result.append({**d.model_dump(), "score": _fallback_score(d)})
-        return {"query": query, "rankedDocuments": result}
+        return {"query": query, "rankedDocuments": result, "tier": "passthrough"}
 
     # ============================================================
     # 第一级：BGE Reranker（精度最高）
     # ============================================================
     # 返回 None 表示不可用 → 继续降级
     ranked = rerank_with_bge(query, docs, top_k)
+    tier = "bge" if ranked else ""          # 只有 BGE 成功时 score 才是绝对相关性
 
     # ============================================================
     # 第二级：DeepSeek LLM 排序
@@ -372,6 +388,7 @@ def rerank(query: str, docs: list[RAGDocument], top_k: int):
         try:
             logger.debug("---docs--- %s", docs)
             ranked = rerank_with_llm(query, docs, top_k)
+            tier = "llm"
         except Exception as e:
             # ============================================================
             # 最终兜底：连 DeepSeek 也失败了 → 按原始向量距离排序
@@ -389,7 +406,7 @@ def rerank(query: str, docs: list[RAGDocument], top_k: int):
                 result.append({**d.model_dump(), "score": _fallback_score(d)})
 
             ranked = result
-
+            tier = "distance"
 
     logger.info("Deepseek rerank 长度：%s", len(ranked))
     # ============================================================
@@ -397,6 +414,10 @@ def rerank(query: str, docs: list[RAGDocument], top_k: int):
     # ============================================================
     # DeepSeek 可能只返回 2-3 个相关编号，如果不够 top_k，
     # 从原始 docs 中取还没被选中的文档补齐（用 text 前80字去重，因为 id 可能为空）
+    #
+    # 注意：补齐进来的文档用的是**粗排分**（相对值），和前面 BGE 的绝对分不同源。
+    # tier 保持不变 —— 因为这只影响尾部补齐项，不至于让整个结果集失去绝对性；
+    # 但门控只看 max(score)，而补齐项分数本来就低，不会抬高 top1，所以无影响。
     if ranked and len(ranked) < top_k:
         selected_texts = {d.get("text", "")[:80] for d in ranked}
 
@@ -406,7 +427,7 @@ def rerank(query: str, docs: list[RAGDocument], top_k: int):
             if d.text[:80] not in selected_texts:
                 ranked.append({**d.model_dump(), "score": _fallback_score(d)})
 
-    return {"query": query, "rankedDocuments": ranked}
+    return {"query": query, "rankedDocuments": ranked, "tier": tier}
 
 
 # ============================================================
