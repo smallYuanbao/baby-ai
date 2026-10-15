@@ -194,20 +194,28 @@ def test_aux_llm_token_budgets_exceed_measured_need():
     意图分类退化成 general、LLM 精排退化成按向量距离排序——表面上只有一句
     「LLM 上游返回空内容」,很难定位到是自己的预算定小了。
 
-    实测(deepseek-v4-flash):
-      · 意图分类:7 种问题 × 5 次 + 最难问题再压 20 次,峰值 441 —— 而且峰值来自
-        「意图模糊」的问题(模型在拿不准归哪类时想得最久),不是最长的问题;
-        原值 10 时 100% 为空、512 时余量只剩 1.2 倍;
-      · LLM 精排:峰值 634,且曾观察到 1024 仍被截断(思维链 2700+ 字符),
-        所以它走默认预算。
+    实测(deepseek-v4-flash,均为真实知识库文档/真实提问,不是合成语料):
+      · 意图分类:峰值 441 —— 峰值来自「意图模糊」的问题(模型拿不准归哪类时想得最久),
+        不是最长的问题;原值 10 时 100% 为空、512 时余量只剩 1.2 倍;
+      · 主回答:峰值 2479,4096 只剩 1.7 倍余量;
+      · LLM 精排:峰值 5508,4096 只有 0.7 倍(5 次里 2 次撞上限)。
     """
-    from app.services.llm import DEFAULT_MAX_TOKENS, SHORT_TASK_MAX_TOKENS
+    from app.services.llm import (
+        DEFAULT_MAX_TOKENS, RERANK_MAX_TOKENS, SHORT_TASK_MAX_TOKENS,
+    )
 
-    # 相对实测尾部峰值留足 4 倍以上余量。别把这条断言往小改 ——
-    # 预算撞上限时 content 是空串、而且是**静默**走错意图,不会报错。
-    MEASURED_TAIL_MAX = 441        # 意图分类实测尾部峰值(见 llm.py 注释)
-    assert SHORT_TASK_MAX_TOKENS >= 4 * MEASURED_TAIL_MAX
-    assert DEFAULT_MAX_TOKENS > 1024            # 精排那条路用默认预算,必须够
+    # 每档相对自己的实测峰值留 3 倍以上余量。别把这些数字往小改 ——
+    # 预算撞上限时 content 是空串、而且是**静默**降级(分类走错意图 / 精排退化成按距离排),不报错。
+    MEASURED_PEAKS = {
+        "short_task": 441,      # 意图分类
+        "main": 2479,           # 主回答(非流式 / 流式)
+        "rerank": 5508,         # LLM 精排
+    }
+    assert SHORT_TASK_MAX_TOKENS >= 3 * MEASURED_PEAKS["short_task"]
+    assert DEFAULT_MAX_TOKENS >= 3 * MEASURED_PEAKS["main"]
+    assert RERANK_MAX_TOKENS >= 3 * MEASURED_PEAKS["rerank"]
+    # 精排吃得比主回答多,两档不能混用
+    assert RERANK_MAX_TOKENS > DEFAULT_MAX_TOKENS
 
 
 def test_query_rewrite_rejects_fallback_text(monkeypatch):
@@ -232,8 +240,11 @@ def test_query_rewrite_rejects_fallback_text(monkeypatch):
 
 # —— 检索相关性门控:知识库里没有相关内容时,别把无关文档塞进 prompt ——
 
-def _stub_rag(monkeypatch, ranked_docs):
-    """把 get_rag_context 的外部依赖全替换掉,只留门控逻辑是真的。"""
+def _stub_rag(monkeypatch, ranked_docs, tier="bge"):
+    """把 get_rag_context 的外部依赖全替换掉,只留门控逻辑是真的。
+
+    tier 默认 "bge"(唯一有绝对相关性的那档);传别的值可验证"门控按 tier 跳过"。
+    """
     from types import SimpleNamespace
 
     from app.services import chat_service
@@ -247,10 +258,11 @@ def _stub_rag(monkeypatch, ranked_docs):
         chat_service, "route_intent",
         lambda m: SimpleNamespace(intent="general", prompt=""),
     )
-    monkeypatch.setattr(chat_service, "hybrid_search", lambda *a, **k: [])
+    # 检索已从 hybrid_search（线性加权）切到 hybrid_search_rrf，stub 跟着改名
+    monkeypatch.setattr(chat_service, "hybrid_search_rrf", lambda *a, **k: [])
     monkeypatch.setattr(
         chat_service, "rerank",
-        lambda q, docs, top_k: {"rankedDocuments": ranked_docs},
+        lambda q, docs, top_k: {"rankedDocuments": ranked_docs, "tier": tier},
     )
 
 
@@ -305,3 +317,160 @@ def test_rag_gate_handles_empty_retrieval(monkeypatch):
 
     assert refs == []
     assert messages      # prompt 仍然拼得出来
+
+# —— 非育儿问题（off_topic）意图 ——
+
+def test_meta_question_requires_whole_sentence_match():
+    """元问题判定必须「整句相等」,不能用子串或前缀。
+
+    踩过:最早写成 startswith + 长度上限 15,结果「你是谁？我家宝宝晚上总哭闹」
+    正好 12 个字,前缀匹配命中 → 一条真育儿问题被判成 off_topic(关键词路径 0.97
+    直接采纳),家长拿到的是「我是育儿助手」这种答非所问。
+    在育儿/医疗场景里,误判成不答比多套一层回答模板严重得多。
+    """
+    from app.services.pipeline.intent import _is_meta_question
+
+    # 真·元问题（允许首尾标点/语气词）
+    assert _is_meta_question("你是谁") is True
+    assert _is_meta_question("你是谁呀") is True
+    assert _is_meta_question("你能做什么？") is True
+    assert _is_meta_question("介绍一下你自己") is True
+
+    # 危险共现:句子里有元问题措辞、但真正问的是育儿 —— 必须判 False
+    assert _is_meta_question("你是谁？我家宝宝晚上总哭闹") is False
+    assert _is_meta_question("你能做什么？我想问宝宝辅食") is False
+    assert _is_meta_question("你好，宝宝发烧了怎么办") is False
+
+
+def test_off_topic_uses_standalone_prompt():
+    """off_topic 必须用独立 prompt,不能拼 BASE_PROMPT。
+
+    拼回去就等于回到「你是谁 → 🚨 什么时候去医院：这个问题不用去医院😄」那个状态。
+    """
+    from app.services.pipeline.intent import (
+        BASE_PROMPT, INTENT_APPENDS, STANDALONE_PROMPTS, build_system_prompt,
+    )
+
+    assert "off_topic" in STANDALONE_PROMPTS
+    assert build_system_prompt("off_topic") == INTENT_APPENDS["off_topic"]
+    # 不能含 BASE_PROMPT 里那套五段式的**正向**要求
+    assert "先给结论**（1-2句核心判断）" not in build_system_prompt("off_topic")
+    # 一般育儿意图仍然拼 BASE_PROMPT
+    assert build_system_prompt("illness").startswith(BASE_PROMPT)
+
+
+def test_off_topic_skips_retrieval(monkeypatch):
+    """off_topic 不该触发检索。
+
+    知识库里本来就没有这类内容,跑一遍纯属浪费 —— 实测「你是谁」原本要跑完
+    BM25 + BGE 精排(单次 24 秒)才被相关性门控拦掉;跳过之后端到端 ~40 秒 → ~2 秒。
+    """
+    from types import SimpleNamespace
+
+    from app.services import chat_service
+    from app.services.chat_service import get_rag_context
+
+    def boom(*a, **k):
+        raise AssertionError("off_topic 不该调用检索")
+
+    monkeypatch.setattr(chat_service, "get_history", lambda *a, **k: [])
+    monkeypatch.setattr(
+        chat_service, "rewrite_query",
+        lambda m, h: SimpleNamespace(wasRewritten=False, rewrittenQuery=m),
+    )
+    monkeypatch.setattr(
+        chat_service, "route_intent",
+        lambda m: SimpleNamespace(intent="off_topic", prompt=""),
+    )
+    monkeypatch.setattr(chat_service, "hybrid_search_rrf", boom)
+    monkeypatch.setattr(chat_service, "rerank", boom)
+
+    messages, refs, _, _ = get_rag_context("元问题测试", "sess-off-1", [], "alice")
+
+    assert refs == []
+    assert messages       # prompt 仍然拼得出来
+
+
+# —— 混合检索切到 RRF ——
+
+def test_rrf_scores_are_normalized_to_unit_range(monkeypatch):
+    """RRF 的原始分只有 0.016~0.033,必须归一化到 0~1 再放进 score。
+
+    不归一化会有两个后果:
+      - 前端「相关性」徽章对最好的那条也只显示 3%;
+      - 下游相关性门控(阈值 0.1)会把**所有**查询都判成"知识库无内容"。
+    """
+    import app.services.rag.retriever as retr
+
+    class _Doc:
+        def __init__(self, i):
+            self.id, self.text = f"d{i}", f"文档{i}"
+            self.distance = self.score = self.metadata = None
+
+    # 稠密、稀疏两路各返回 20 条且完全不重叠 —— 保证有稳定可算的 RRF 排名
+    monkeypatch.setattr(retr, "search_docs", lambda q, top_k: [_Doc(i) for i in range(20)])
+    monkeypatch.setattr(retr, "sparse_search", lambda q, top_k: [_Doc(i) for i in range(20, 40)])
+
+    docs = retr.hybrid_search_rrf("任意查询", top_k=5)
+
+    assert len(docs) == 5
+    assert max(d.score for d in docs) == 1.0    # 归一化后最高分为 1.0
+    assert min(d.score for d in docs) >= 0.0
+    assert all(d.score <= 1.0 for d in docs)
+
+# —— 精排 tier：分数能不能用来做相关性判断的显式契约 ——
+
+def test_rerank_reports_passthrough_tier_when_candidates_fit():
+    """候选数 ≤ top_k 时精排被短路,必须显式标成 passthrough。
+
+    这条路径返回的是**粗排分**（相对值），top1 恒为 1.0 —— 门控读它会永远通过。
+    原先是靠「粗排取 10 > 精排留 5」这个数量关系侥幸避开的，
+    一旦两个数字被改成相等（或知识库很小、候选本来就少）就会静默失效。
+    """
+    from app.models.chat import RAGDocument
+    from app.services.rag.reranker import rerank
+
+    docs = [RAGDocument(id=f"d{i}", text=f"文档{i}", score=0.5) for i in range(3)]
+
+    out = rerank("任意查询", docs, top_k=5)      # 3 <= 5 → 短路，不调 BGE
+
+    assert out["tier"] == "passthrough"
+    assert len(out["rankedDocuments"]) == 3
+
+
+def test_rerank_reports_bge_tier_when_fine_ranking_runs(monkeypatch):
+    """BGE 真正跑了才标 "bge" —— 只有这档的分数是绝对相关性。"""
+    from app.models.chat import RAGDocument
+    from app.services.rag import reranker
+
+    docs = [RAGDocument(id=f"d{i}", text=f"文档{i}") for i in range(10)]
+    monkeypatch.setattr(
+        reranker, "rerank_with_bge",
+        lambda q, d, k: [{"id": "d0", "text": "文档0", "score": 0.9}],
+    )
+
+    out = reranker.rerank("任意查询", docs, top_k=5)   # 10 > 5 → 走精排
+
+    assert out["tier"] == "bge"
+
+
+def test_rag_gate_skipped_when_rerank_degraded(monkeypatch):
+    """精排降级时门控必须跳过 —— 那些 tier 的分数不是相关性。
+
+    LLM 排序的分数是 `1 - 排名/top_k` 编出来的、距离兜底和粗排直通都是相对值，
+    它们的 top1 恒为 1.0。拿这种分数跟阈值比，结果毫无意义：
+    要么永远通过（门控形同虚设），要么哪天归一化方式一改就永远拦截。
+    所以按 tier 显式跳过，并打 warning 日志留痕。
+    """
+    from app.services.chat_service import get_rag_context
+
+    _stub_rag(
+        monkeypatch,
+        [{"id": "d1", "text": "降级路径返回的文档", "score": 0.0}],   # 分数为 0 也不该被拦
+        tier="llm",
+    )
+
+    messages, refs, _, _ = get_rag_context("门控测试-降级跳过", "sess-gate-d", [], "alice")
+
+    assert len(refs) == 1     # 没有被门控拦掉
+    assert "降级路径返回的文档" in " ".join(m.content for m in messages)
