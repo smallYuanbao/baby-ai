@@ -6,10 +6,10 @@ from app.models.chat import ChatMessage, ChatOptions
 from app.utils.logger import logger
 
 # 所有合法的意图标签集合，用于从 LLM 返回内容中提取有效意图
-VALID_INTENTS = {"illness", "feeding", "sleep", "development", "emergency", "daily_care", "vaccine", "general"}
+VALID_INTENTS = {"illness", "feeding", "sleep", "development", "emergency", "daily_care", "vaccine", "general", "off_topic"}
 
 # 1. 定义所有可能的意图类型（类似于 TS 的 type Intent = "illness" | "feeding" | ...）
-Intent = Literal["illness", "feeding", "sleep", "development", "emergency", "daily_care", "vaccine", "general"]
+Intent = Literal["illness", "feeding", "sleep", "development", "emergency", "daily_care", "vaccine", "general", "off_topic"]
 
 
 # ===================================================================
@@ -53,9 +53,9 @@ class IntentResult(BaseModel):
 
 # 各意图的领域附加指令 — 拼接到 BASE_PROMPT 末尾
 #
-# 拼接规则：
-#   - 非急救意图：BASE_PROMPT + INTENT_APPENDS[intent]
-#   - 急救意图：  直接使用 INTENT_APPENDS["emergency"]，不拼接 BASE_PROMPT
+# 拼接规则（见下方 build_system_prompt）：
+#   - 一般育儿意图：BASE_PROMPT + INTENT_APPENDS[intent]
+#   - emergency / off_topic：直接使用 INTENT_APPENDS[intent]，不拼接 BASE_PROMPT
 #
 # 每条附加指令的作用：
 #   - 强化该领域的回答侧重点（如疾病强调量化指标、喂养强调分月龄表格）
@@ -64,7 +64,8 @@ class IntentResult(BaseModel):
 #
 # 备注：
 #   general 的附加指令为空字符串，即纯 BASE_PROMPT。
-#   emergency 的值是完整独立 prompt，包含角色、回答结构和对话铁律。
+#   emergency 和 off_topic 的值是**完整独立 prompt**（角色 + 回答结构 + 对话铁律
+#   全在里面），不拼 BASE_PROMPT —— 详见 STANDALONE_PROMPTS 的说明。
 # 2. 数据结构（直接复制多行文本）
 INTENT_APPENDS: Dict[Intent, str] = {
     "illness": """
@@ -126,6 +127,20 @@ INTENT_APPENDS: Dict[Intent, str] = {
 - 强调"不要因为轻微反应推迟后续接种""",
     
     "general": "",
+
+    # 非育儿问题同样是**完整独立 prompt**（不拼 BASE_PROMPT）。
+    # 为什么：BASE_PROMPT 通篇是"儿科主任医师 + 五段式问诊"的设定，
+    # 问「你是谁」时它会硬把回答拽成问诊体（实测输出过「🚨 什么时候去医院：这个问题不用去医院😄」）。
+    # 这里干脆不复用，从设定上就换成"简短友好的助手"。
+    "off_topic": """你是"小熊育儿助手"🐻 —— 一个专注 0-6 岁宝宝养育与健康的 AI 助手。
+
+用户这条消息**与育儿无关**（可能是打招呼、询问你的身份，或者问其他领域的事）。请：
+
+- 用两三句话简短、友好地直接回答；
+- **不要**使用育儿回答的五段式结构，**不要**出现「什么时候去医院」这类与问题无关的小节；
+- **不要**编造就医建议，**不要**补免责声明；
+- **不要**提「知识库」「参考资料」这类内部机制 —— 那是我们系统内部的事；
+- 如果是打招呼或询问你的身份，顺带说清你能帮什么忙，并把话题自然引回育儿。""",
 }
 
 # 基础 System Prompt — 先分 A/B 类，再决定用不用五段式
@@ -178,6 +193,23 @@ BASE_PROMPT = f"""你是"小熊育儿助手"🐻 — 拥有 15 年临床经验�
 - 每句话都让家长觉得"有用"，删掉任何不增加决策价值的句子
 - 说"不建议"时必跟理由+替代方案
 - 回答末尾追问 1-2 个关键信息，引导家长补充"""
+
+# 这两档用**完整独立 prompt**，不与 BASE_PROMPT 拼接：
+#   - emergency：急救要三段式简洁结构，五段式科普会稀释紧迫感；
+#   - off_topic：BASE_PROMPT 通篇是儿科问诊设定，问「你是谁」会被硬拽成问诊体
+#     （实测输出过「🚨 什么时候去医院：这个问题不用去医院😄」）。
+STANDALONE_PROMPTS = {"emergency", "off_topic"}
+
+
+def build_system_prompt(intent: Intent) -> str:
+    """按意图拼出 System Prompt：独立档直接用，其余 = BASE_PROMPT + 领域附加。
+
+    原先这行三元表达式在 route_intent 里写了两遍，加 off_topic 时两处都得改、
+    漏一处就会出现"关键词路径对、LLM 路径错"的不一致，所以收成一个入口。
+    """
+    if intent in STANDALONE_PROMPTS:
+        return INTENT_APPENDS[intent]
+    return BASE_PROMPT + INTENT_APPENDS[intent]
 
 # ===================================================================
 # 关键词规则库 — 共 7 组，覆盖所有非 general 意图
@@ -254,6 +286,41 @@ KEYWORD_RULES: list[KeywordRule] = [
 ]
 
 # ===================================================================
+# 元问题（问助手自己是誰 / 能做什么）— 整句匹配，不走关键词子串
+# ===================================================================
+#
+# 为什么**不能**把它做成一条普通 KeywordRule：那套是**子串匹配**，
+# 而「你是谁？我家宝宝晚上总哭闹」里也含「你是谁」—— 实测会被判成 off_topic
+# （关键词路径 0.97，直接采纳），一条真育儿问题就这样被"不答"了。
+# 在育儿/医疗场景里，误判成不答比多套一层回答模板严重得多。
+#
+# 所以这里改成整句判定：去掉首尾空白和标点后必须**等于**某个模式（或以其开头），
+# 再加一道长度上限 —— 元问题一定很短，长句一律不判。
+META_QUESTION_PATTERNS = (
+    '你是谁', '你叫什么', '你是什么', '你是什么助手', '你叫什么名字',
+    '你能做什么', '你会做什么', '你能干嘛', '你能干什么', '你有什么功能',
+    '介绍一下你自己', '介绍下你自己', '自我介绍一下',
+)
+
+# 允许出现在首尾的噪音：标点 + 语气词。只去**首尾**，中间的一律不动。
+_META_TRAILING_NOISE = '？?。.！!~～、,， 呀啊呢吧哦嘛哈'
+
+
+def _is_meta_question(question: str) -> bool:
+    """判断是不是「问助手自身」的元问题。
+
+    要求**整句就等于**某个模式（只允许去掉首尾的标点和语气词），
+    绝不做子串或前缀匹配。
+
+    踩过的坑：最早写成 `startswith` + 长度上限 15，结果「你是谁？我家宝宝晚上总哭闹」
+    正好 12 个字，前缀匹配命中 → 一条真育儿问题被判成「不答」。
+    在育儿/医疗场景里，误判成不答比多套一层回答模板严重得多，所以判定要从严。
+    """
+    stripped = question.strip().strip(_META_TRAILING_NOISE)
+    return stripped in META_QUESTION_PATTERNS
+
+
+# ===================================================================
 # 分类逻辑
 # ===================================================================
 #
@@ -267,9 +334,15 @@ KEYWORD_RULES: list[KeywordRule] = [
 #   classifyByLLM() 会从返回内容中提取第一个匹配的有效意图标签，
 #   因此即使 LLM 多输出了解释文字，也能正确解析。
 
-LLM_CLASSIFY_PROMPT = """判断以下育儿问题属于哪个类别，只输出一个词：
+LLM_CLASSIFY_PROMPT = """判断以下问题属于哪个类别，只输出一个词：
 
-类别：illness(疾病) feeding(喂养) sleep(睡眠) development(发育) emergency(急救) daily_care(日常护理) vaccine(疫苗) general(其他)
+类别：illness(疾病) feeding(喂养) sleep(睡眠) development(发育) emergency(急救) daily_care(日常护理) vaccine(疫苗) general(其他育儿问题) off_topic(与育儿完全无关)
+
+⚠️ 判定 off_topic 的门槛很高，务必谨慎：
+- 只要问题与宝宝 / 育儿有**任何**关联，就必须归到对应的育儿类别，**不要**选 off_topic；
+- off_topic 只用于三种情况：询问你（助手）自身的身份或能力、纯闲聊、明确属于其他领域的问题；
+- **拿不准就选 general** —— 把育儿问题误判成 off_topic 会让家长得不到该有的建议，
+  比多套一层回答模板严重得多。
 
 问题：{question}
 
@@ -311,6 +384,10 @@ def classify_by_keyword(question: str) -> Optional[IntentResult]:
         匹配结果（confidence >= 0.8）或 None（匹配不确定，需 LLM 兜底）
     """
     # 初始化为兜底意图，置信度为 0
+    # 元问题先判：整句匹配，命中就短路，不再走下面的子串关键词
+    if _is_meta_question(question):
+        return IntentResult(intent='off_topic', confidence=0.95, source='keyword', prompt='')
+
     best_intent: Intent = 'general'
     best_confidence = 0
 
@@ -409,15 +486,17 @@ def route_intent(question: str) -> IntentResult:
     | 关键词结果          | 置信度   | 动作                          | source   |
     |--------------------|----------|-------------------------------|----------|
     | 命中 emergency     | >= 1.0   | 直接采纳，独立 SP             | keyword  |
+    | 命中 off_topic     | >= 0.9   | 直接采纳，独立 SP             | keyword  |
     | 命中其他领域       | >= 0.9   | 直接采纳，拼接 BASE_PROMPT    | keyword  |
     | 命中但低置信       | 0.8-0.89 | LLM 复核确认                  | llm      |
     | 完全未命中         | —        | LLM 从头分类                  | llm      |
     | LLM 调用失败       | —        | 降级为 general                | llm      |
 
-    ## Prompt 拼接规则
+    ## Prompt 拼接规则（统一走 build_system_prompt）
 
-      - **emergency**：直接使用 INTENT_APPENDS["emergency"]（完整独立 prompt）
-        - 原因：急救需要三段式简洁结构，BASE_PROMPT 的五段式科普会稀释紧迫感
+      - **emergency / off_topic**：直接使用 INTENT_APPENDS[intent]（完整独立 prompt）
+        - emergency：急救要三段式简洁结构，五段式科普会稀释紧迫感
+        - off_topic：BASE_PROMPT 是儿科问诊设定，问「你是谁」会被硬拽成问诊体
       - **其他意图**：BASE_PROMPT + INTENT_APPENDS[intent]
         - BASE_PROMPT 提供通用角色和回答结构
         - INTENT_APPENDS 提供领域特有的侧重点和就医指征
@@ -446,9 +525,7 @@ def route_intent(question: str) -> IntentResult:
 
     # 高置信度直接采纳 — 最快路径，零 LLM 成本
     if keyword_result and keyword_result.confidence >= 0.9:
-        # 急救模式用独立 prompt，不和 BASE_PROMPT 拼接
-        # 设计决策：急救场景需要即时行动指令，五段式科普会耽误时间
-        prompt = INTENT_APPENDS["emergency"] if  keyword_result.intent == "emergency" else BASE_PROMPT + INTENT_APPENDS[keyword_result.intent]
+        prompt = build_system_prompt(keyword_result.intent)
 
         return IntentResult(
             intent = keyword_result.intent,
@@ -466,9 +543,8 @@ def route_intent(question: str) -> IntentResult:
     # 分类失败时 classifyByLLM 内部静默降级为 'general'
     llm_intent = classify_by_llm(question)
 
-    # 拼接 System Prompt（与 keyword 路径一致的拼接规则）
-
-    prompt =  INTENT_APPENDS["emergency"] if llm_intent == "emergency" else BASE_PROMPT + INTENT_APPENDS[llm_intent]
+    # 拼接 System Prompt（与 keyword 路径共用同一个入口，避免两条路径拼法不一致）
+    prompt = build_system_prompt(llm_intent)
 
     return IntentResult(
         intent = llm_intent,
