@@ -7,7 +7,7 @@ from mcp.client.stdio import stdio_client
 from app.services.llm import DEFAULT_MAX_TOKENS, call_deepseek, create_completion
 from app.services.tools import get_weather, WEATHER_TOOL
 from app.models.chat import ChatHistoryEntry, ChatMessage, Reference
-from app.services.rag.retriever import hybrid_search
+from app.services.rag.retriever import hybrid_search_rrf
 from app.services.rag.reranker import rerank
 from app.services.chat_service import _build_messages
 from app.services.pipeline.intent import IntentResult, route_intent
@@ -172,10 +172,8 @@ def rag_and_rerank(intent_result: IntentResult, message: str ) -> tuple[list[str
         context_docs = []
         references = []
     else:
-        results = hybrid_search(message, alpha=0.7, top_k=10)
+        results = hybrid_search_rrf(message, top_k=10)
 
-        # RRF 混合检索 → 多召回一些候选
-        # results = hybrid_search_rrf(message, top_k=10)
 
         # 精排：BGE → DeepSeek → 原始距离排序
         ranked_result = rerank(message, results, top_k=5)

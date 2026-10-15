@@ -255,7 +255,16 @@ def get_rank(results: list[RAGDocument]) -> dict[str, int]:
 
 
 def hybrid_search_rrf(query: str, top_k: int = 5, k: int = 60) -> list[RAGDocument]:
-    """混合检索（RRF 版）：用排名融合替代分数加权，不需要归一化"""
+    """混合检索（RRF 版）：用排名融合替代分数加权。
+
+    为什么不直接用 RRF 的原始分数：``1/(k+rank)`` 相加的量级只有 **0.016~0.033**。
+    它是个排名融合值，**不是相关性**，直接塞进 ``score`` 会带来两个后果：
+      - 前端「相关性」徽章对最好的那条也只显示 3%；
+      - 下游的检索相关性门控（阈值 0.1）会把**所有**查询都判成"知识库无内容"。
+    所以这里统一做一次 min-max 归一化到 0~1，与 ``hybrid_search``（线性加权版）
+    的 ``score`` 语义保持一致：**只保证同一批候选内部的相对顺序，不代表绝对相关性**。
+    真正的绝对相关性由精排阶段（BGE）给出。
+    """
     dense_results = search_docs(query, top_k=20)
     sparse_results = sparse_search(query, top_k=20)
 
@@ -283,9 +292,12 @@ def hybrid_search_rrf(query: str, top_k: int = 5, k: int = 60) -> list[RAGDocume
     sorted_items = sorted(rrf_scores.items(), key=lambda p: p[1], reverse=True)
     top_items = sorted_items[:top_k]
 
+    # 归一化只针对最终入选的这批（排序不变），让 score 落回 0~1
+    normalized = _normalize([score for _, score in top_items])
+
     result = []
-    for text, score in top_items:
+    for (text, _), score in zip(top_items, normalized):
         doc_id = text_to_id.get(text, "")
-        result.append(RAGDocument(id=doc_id, text=text, score=round(score, 6)))
+        result.append(RAGDocument(id=doc_id, text=text, score=round(score, 4)))
 
     return result
