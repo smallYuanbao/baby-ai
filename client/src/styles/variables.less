@@ -51,12 +51,31 @@
 @accent-400: #facc15;  // ** accent gold **   — default accent element fill
 
 // -------- Colors: Surface -------------------------------------------------
-// Background colours for page-level containers.  They provide a warm,
-// slightly tinted base that softens the starkness of pure white while
-// keeping text contrast high.  The three tiers form a subtle depth gradient.
-@surface-light: #fffbf5;  // warm white        — main page background
-@surface: #fff7ed;        // warm cream        — card / panel background
-@surface-dark: #fef0e0;   // warm beige        — inset sections, code blocks
+// 承载内容的「表面色」——页面底、面板、卡片、输入框都用它。
+//
+// 这个值**必须和 @white 拉开距离**：应用主体（侧栏 / 聊天区）是纯白,
+// 表面色是叠在它上面的面板与卡片。两者挨得太近,面板和卡片就会"融进白底",
+// 三栏布局看不出边界。
+//
+// 踩过的坑:原值 #fffbf5 与 #ffffff 只差 1.031:1(可见阈值大约在 1.05~1.15,
+// 明显可辨要 ≥1.2),而且当时还定义了一个从没被用过的 @surface(#fff7ed,
+// 与 @primary-50 同值)——注释里写的"三层深度梯度"实际上只有一层真实在用。
+// 现在收敛成一个 token,值取 #fdf4ea(相对纯白 1.088:1):层次看得出来,
+// 又保持暖白调性、不至于压重。
+//
+// 想再深一档可以试 #f8efe3(1.138:1),但会更"纸质"、更重;
+// 换成暖灰(#f6f4f1 一类)能分得更开,代价是丢掉这套配色的暖意。
+@surface-light: #fdf4ea;  // 暖白 —— 面板 / 卡片 / 输入框 / 页面底
+
+// 「下沉」表面：比页面白底更深一档，用来表现"凹进去"的容器——
+// 目前用于分段控件(SegmentedControl)的轨道、以及类似的槽位。
+//
+// 为什么需要它：轨道原来用 @gray-50(#f9fafb)，对纯白只有 **1.045:1** ——
+// 轨道本身看不见，坐在轨道上的激活态白药丸(白 vs 轨道也是 1.045:1)自然也认不出来，
+// 整个控件的"选中"只能靠文字颜色区分。
+// #efe9e0 对纯白 1.207:1，和 iOS 分段控件的轨道(~1.21:1)同量级：看得见但不压重；
+// 而且它是暖色，跟这套暖调表面是一个色系(冷灰的 @gray-50 放在暖底上会显脏)。
+@surface-sunken: #efe9e0;
 
 // -------- Colors: Bubble --------------------------------------------------
 // Chat-bubble colours used in the conversational UI.  User bubbles use
@@ -77,9 +96,23 @@
 @gray-100: #f3f4f6;  // cool light gray    — section dividers
 @gray-200: #e5e7eb;  // light gray         — input borders (default)
 @gray-300: #d1d5db;  // mid-light gray     — muted borders, dividers
-@gray-350: #b0b8c4;  // bridge gray        — subtle icon fill (non-standard stop)
-@gray-400: #9ca3af;  // medium gray        — placeholder text, disabled text
-@gray-500: #6b7280;  // mid gray           — secondary / caption text
+// 这一档是"弱化文字/图标"的主力：占位符、时间戳、说明文字、次要图标、图表轴标签，
+// 全站 20+ 处都用它。
+//
+// 踩过的坑:原值 #9ca3af 在纯白上只有 2.54:1、在 @surface-light 上 2.33:1 ——
+// **连 WCAG 非文本元素的 3:1 底线都没到**,占位符和说明文字基本看不清。
+// 提到 #828994(新底色 3.24:1 / 纯白 3.53:1):过了 3:1 底线,又明显弱于
+// @gray-500(4.84:1)的次要正文,层次还在。
+//
+// 想要完全 AA(4.5:1)就得直接上 @gray-500 —— 但那样时间戳、提示语会和正文一样重,
+// 视觉层级就没了。这一档的定位是"能看清但不抢戏"。
+@gray-400: #828994;  // medium gray        — placeholder / muted label / icon
+// 比 Tailwind 的 gray-500(#6b7280) 略深一档。
+// 原因:它被 20+ 处当**文字色**用(说明文字、卡片摘要、表单标签),而这些地方大多
+// 落在 @surface-light 上。#6b7280 在纯白上是 4.83:1 够用,但在 #fdf4ea 上只有
+// 4.44:1 —— 刚好跌破 WCAG AA 的 4.5 线。#666c79 在新底色上 4.84:1、纯白上 5.27:1,
+// 两边都过线且留有余量。色相不变,肉眼几乎看不出差异。
+@gray-500: #666c79;  // mid gray           — secondary / caption text
 @gray-600: #4b5563;  // dark gray          — body text (primary copy)
 @gray-700: #374151;  // deeper gray        — emphasised body text
 @gray-800: #1f2937;  // near-black gray    — sub-headings
@@ -90,8 +123,16 @@
 // independently of the brand palette.  Also includes the absolute black
 // and white primitives.
 @red-50: #fef2f2;   // error background   — inline validation message bg
+@red-200: #fecaca;  // error border (强)   — ErrorBanner 边框 / hover 底
 @red-300: #fca5a5;  // error border        — invalid input ring
-@red-500: #ef4444;  // ** error copy **    — error text / icon colour
+// 红色被当成两种用途用，必须拆开 —— 一个值同时做文字色和按钮底色是配不好的：
+//   · 做**文字**要够深(≥4.5:1)。#ef4444 在 @surface-light 上只有 3.46:1,错误提示看不清;
+//   · 做**按钮底色**要浅一点才好看,但上面的白字要够(≥4.5:1)。#ef4444 上白字只有 3.76:1,
+//     「确定清空」按钮的文案也不达标。
+// 拆成三档后两种用途各取所需。红-700 与 ErrorBanner 里原本硬编码的值一致,顺手收编。
+@red-500: #ef4444;  // 装饰性红           — 录音指示点等无文字的场合
+@red-600: #dc2626;  // 红色按钮底         — 白字在其上 4.83:1，过 AA
+@red-700: #b91c1c;  // ** error copy **   — 错误文字 / 图标(新底色 5.95:1)
 @white: #ffffff;    // pure white          — text on dark, overlay fg
 @black: #000000;    // pure black          — sparingly for maximum contrast
 

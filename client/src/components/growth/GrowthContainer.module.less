@@ -59,39 +59,9 @@
 // View toggle (chart / table switcher)
 // ---------------------------------------------------------------------------
 
-.viewToggle {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  background: @gray-50;
-  border-radius: 1rem;           // pill shape
-  padding: 0.125rem;             // thin inner gap around the tabs
-}
-
-.viewTab {
-  flex: 1;                       // tabs share available width evenly
-  padding: 0.375rem 0;
-  font-size: 0.75rem;
-  font-weight: 500;
-  border-radius: 0.5rem;
-  transition: all 200ms;         // smooth color/background switch on toggle
-
-  // Currently selected tab
-  &.active {
-    background: @white;
-    color: @primary-600;
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); // subtle lift
-  }
-
-  // Unselected tab
-  &.inactive {
-    color: @gray-400;
-
-    &:hover {
-      color: @gray-600;          // hint that the tab is interactive
-    }
-  }
-}
+// 视图切换（记录 / 曲线 / 分析）已抽成共享组件 SegmentedControl —— 样式只有一份了。
+// 这里原来有一份逐字重复的 .viewToggle / .viewTab，与 GrowthChart 里那份除了
+// align-items 和 margin 之外完全相同，改一处必漏一处。
 
 // ---------------------------------------------------------------------------
 // Scrollable content area

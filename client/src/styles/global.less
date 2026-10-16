@@ -336,3 +336,26 @@ button {
     background: rgba(249, 250, 251, 0.5); // gray-50 at 50% opacity
   }
 }
+
+// ============================================================
+//  antd 兼容补丁
+// ============================================================
+// 这是整个样式层**唯一**直接写 `.ant-*` 的地方。理由：这一项 antd 的
+// ConfigProvider theme token 覆盖不到，但它是设计上的硬要求。
+//
+// 【表单 label 的字重】
+//
+// antd 的 Form 组件 token 有 labelFontSize / labelColor，**唯独没有 labelFontWeight**，
+// 生成出来的 label 固定是 `font-weight: 400`。
+//
+// 为什么必须补：本项目为了对齐 16px 正文，把 antd 的 seed `fontSize` 从默认的 14
+// 抬到了 16，label 跟着一起变大。结果是 label 和输入框里的内容**同色同号同字重**
+// （浏览器实测均为 `16px / 400 / #1f2937`），完全看不出哪个是标签。
+// 字号和颜色已在 src/theme.ts 的 components.Form 里调开（14px / @gray-900），
+// 字重没有 token 可用，只能在这里补一条。
+//
+// 影响面是所有 antd 表单的 label —— 这正是想要的：项目里 label 统一 600 字重。
+// 如果哪天 antd 补上了 labelFontWeight，请把这条删掉改回 token。
+.ant-form-item-label > label {
+  font-weight: 600;
+}

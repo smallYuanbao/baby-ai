@@ -17,17 +17,24 @@ interface ReferencePanelProps {
   /** 最新一条带引用的助手消息的引用；没有则展示空态。 */
   references: Reference[];
   /**
+   * 最新一条助手回答是否还在流式生成中。
+   *
+   * **必须先于 hasAnswer 判断**：检索要几十秒，这期间助手消息已经存在但引用还没到，
+   * 如果直接落到"没用到知识库"那条兜底文案上，用户会以为模型已经放弃检索了。
+   */
+  isStreaming: boolean;
+  /**
    * 当前对话里是否已经存在助手回答（含正在生成的那条）。
    *
    * 用来区分两种"引用为空"：
    *   - 还没提问 → 介绍这一栏是干什么的；
-   *   - 提了但没检索到相关内容（后端相关性门控把无关文档丢掉了）→ 说明这次回答
+   *   - 答完了但没检索到相关内容（后端相关性门控把无关文档丢掉了）→ 说明这次回答
    *     没用到知识库，否则会显示"提问后,这里会显示…"，可明明已经问过了。
    */
-  answered: boolean;
+  hasAnswer: boolean;
 }
 
-export function ReferencePanel({ references, answered }: ReferencePanelProps) {
+export function ReferencePanel({ references, isStreaming, hasAnswer }: ReferencePanelProps) {
   return (
     <aside className={styles.panel}>
       <div className={styles.head}>
@@ -41,7 +48,11 @@ export function ReferencePanel({ references, answered }: ReferencePanelProps) {
             <ReferenceCard key={`${r.id}-${i}`} reference={r} index={i + 1} />
           ))}
         </div>
-      ) : answered ? (
+      ) : isStreaming ? (
+        // 检索要几十秒。这期间"引用为空"是正常的中间态，不是结论 ——
+        // 直接显示下面那条兜底文案会让用户以为模型没检索到东西。
+        <p className={styles.empty}>正在检索知识库…</p>
+      ) : hasAnswer ? (
         <p className={styles.empty}>
           本次回答没有用到知识库内容 —— 问题可能不在知识库覆盖的育儿范围内，
           答案来自模型自身的知识，请结合常识判断。

@@ -10,6 +10,8 @@
 
 import { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LoadingState } from '../shared/LoadingState';
+import { SegmentedControl } from '../shared/SegmentedControl';
 import { useGrowth } from '../../hooks/useGrowth';
 import type { ChartDataResponse } from '../../types/growth';
 import styles from './GrowthChart.module.less';
@@ -72,21 +74,18 @@ export function GrowthChart({ childId, childName }: GrowthChartProps) {
   return (
     <div className={styles.wrapper}>
       {/* 指标切换按钮组 */}
-      <div className={styles.metricToggle}>
-        {METRICS.map((m) => (
-          <button
-            key={m.key}
-            onClick={() => setMetric(m.key)}
-            className={`${styles.metricTab} ${metric === m.key ? styles.active : styles.inactive}`}
-          >
-            {m.label}
-          </button>
-        ))}
-      </div>
+      {/* 子级选项：用 underline 变体，跟上方主级的药丸组区分开 */}
+      <SegmentedControl
+        items={METRICS}
+        value={metric}
+        onChange={setMetric}
+        ariaLabel="指标切换"
+        variant="underline"
+      />
 
       {/* 图表区域：按加载态 / 空数据 / 正常数据分支渲染 */}
       {loading ? (
-        <div className={styles.loadingState}>加载中...</div>
+        <LoadingState text="正在加载成长曲线…" />
       ) : !data || data.dataPoints.length === 0 ? (
         <div className={styles.emptyState}>
           <span className={styles.emptyIcon}>📊</span>

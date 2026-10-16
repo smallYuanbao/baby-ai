@@ -24,14 +24,6 @@
   margin: 0 auto;
 }
 
-// Centred spinner / skeleton placeholder shown while children are being fetched.
-.loading {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
 // ---------------------------------------------------------------------------
 // Header area (icon, title, subtitle)
 // ---------------------------------------------------------------------------
@@ -76,6 +68,7 @@
 .childCard {
   width: 100%;
   padding: 1rem;
+  cursor: pointer;      // 现在是个 div（原来是 <button>），手型光标要自己补
   background: @surface-light;
   border-radius: 1.25rem;
   border: 1px solid @primary-100;
@@ -112,11 +105,6 @@
   font-size: 1.875rem;
 }
 
-// Text container — reserved for future expansion (e.g. extra metadata lines).
-.childDetails {
-  // text container
-}
-
 .childName {
   font-weight: 600;
   color: @gray-800;
@@ -132,121 +120,47 @@
 // Delete button (inside a child card)
 // ---------------------------------------------------------------------------
 
+// 包住删除按钮的 span。唯一作用是**截断点击冒泡** ——
+// 否则点删除会顺带触发外层卡片的 onClick（把宝宝选中了）。
+.deleteWrap {
+  display: inline-flex;
+}
+
 .deleteButton {
-  color: @gray-300;
-  // Animate colour changes on hover for a polished feel.
-  transition: color, background-color, border-color 200ms;
-  padding: 0.25rem;
-
-  // Turn red on hover to signal the destructive action.
-  &:hover {
-    color: #f87171;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Add-child form panel
-// ---------------------------------------------------------------------------
-
-// Card-like container for the inline add-child form.
-.formPanel {
-  background: @white;
-  border-radius: 1.25rem;
-  border: 1px solid @primary-200;
-  padding: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-// Text input fields (name, birth date, etc.).
-.formInput {
-  width: 100%;
-  padding: 0.625rem 0.75rem;
-  font-size: 0.875rem;
-  background: @surface-light;
-  border-radius: 1rem;
-  border: 1px solid @primary-100;
-
-  // Highlight border when the input is focused.
-  &:focus {
-    outline: none;
-    border-color: @primary-300;
-  }
-}
-
-// Label above a form field or group of fields.
-.formLabel {
-  font-size: 0.75rem;
   color: @gray-400;
-  margin-bottom: 0.25rem;
-  display: block;
+  padding: 0.375rem;
+  border-radius: 0.625rem;
+
+  // ⚠️ 原来写的是 `transition: color, background-color, border-color 200ms`。
+  // CSS 的 transition 简写里，**逗号分隔的是三个独立过渡**，没写时长的默认 0s ——
+  // 实测算出来的时长就是 `0s, 0s, 0.2s`：颜色是"啪"地一下变、没有渐变。
+  // 结果就是 hover 明明生效（灰→红），却因为瞬变 + 卡片本身 hover 也在变色而被忽略掉。
+  transition: color @transition-base, background-color @transition-base,
+              transform @transition-base;
+
+  // hover：变红 + 补一层浅红底。只改颜色不改背景的话，一个 12px 的 emoji 在浅色卡片上
+  // 太弱，看不出这是个可点的按钮。
+  &:hover {
+    color: @red-700;
+    background: @red-50;
+  }
+
+  // 按下：缩一下给触感反馈。**原来完全没有 :active 态**，按下去毫无反应。
+  &:active {
+    transform: scale(0.9);
+  }
 }
 
 // ---------------------------------------------------------------------------
-// Gender toggle (male / female segmented control)
+// Modal actions
 // ---------------------------------------------------------------------------
 
-// Horizontal row of two side-by-side gender buttons.
-.genderToggle {
+// 「添加宝宝」弹窗底部的按钮行（取消 / 确认创建）。
+// 表单本身已交给 antd（Form / Input / DatePicker / Radio.Group / Modal），
+// 所以这里只剩这一个布局类 —— 原来那一整段 .formPanel / .formInput / .formLabel /
+// .genderToggle / .genderOption / .formActions 全删了。
+.modalActions {
   display: flex;
+  justify-content: flex-end;
   gap: 0.5rem;
-}
-
-// Base styles shared by both gender options.
-.genderOption {
-  flex: 1;
-  padding: 0.625rem 0;
-  border-radius: 1rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  transition: all 200ms;
-
-  // Active male — blue tint with a blue border.
-  &.maleActive {
-    background: #eff6ff;
-    color: #1d4ed8;
-    border: 2px solid #93c5fd;
-  }
-
-  // Inactive male — neutral grey; border is transparent to preserve layout.
-  &.maleInactive {
-    background: @gray-50;
-    color: @gray-500;
-    border: 2px solid transparent;
-  }
-
-  // Active female — pink tint with a pink border.
-  &.femaleActive {
-    background: #fdf2f8;
-    color: #be185d;
-    border: 2px solid #f9a8d4;
-  }
-
-  // Inactive female — same neutral treatment as inactive male.
-  &.femaleInactive {
-    background: @gray-50;
-    color: @gray-500;
-    border: 2px solid transparent;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Form actions & utility helpers
-// ---------------------------------------------------------------------------
-
-// Row of action buttons (e.g. Cancel / Save) at the bottom of the form.
-.formActions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-// Utility: force an element to take full available width.
-.fullWidth {
-  width: 100%;
-}
-
-// Utility: flex-grow: 1 shorthand — lets a child fill remaining space.
-.flex1 {
-  flex: 1;
 }

@@ -9,6 +9,7 @@
  */
 
 import { useState } from 'react';
+import { SegmentedControl, type SegmentedControlItem } from '../shared/SegmentedControl';
 import { ChildSelector } from './ChildSelector';
 import { GrowthRecordForm } from './GrowthRecordForm';
 import { GrowthRecordList } from './GrowthRecordList';
@@ -20,13 +21,20 @@ import styles from './GrowthContainer.module.less';
 /** 视图模式：列表视图 / 生长曲线图 / AI 分析 */
 type ViewMode = 'list' | 'chart' | 'analysis';
 
+/** 视图切换的三个选项。抽成常量是因为要在 JSX 里按顺序渲染。 */
+const VIEW_MODES: readonly SegmentedControlItem<ViewMode>[] = [
+  { key: 'list', label: '记录' },
+  { key: 'chart', label: '曲线' },
+  { key: 'analysis', label: '分析' },
+];
+
 /**
  * GrowthContainer 组件
  *
  * 作为 growth 模块的路由级容器，持有模块级状态并根据状态驱动子组件渲染。
  * 组件树概览：
  * - 未选中宝宝 → ChildSelector
- * - 已选中宝宝 → 工具栏 (toolbar) + 视图切换 (viewToggle) + 子视图 + 可选的录入表单弹窗
+ * - 已选中宝宝 → 工具栏 (toolbar) + 视图切换 (SegmentedControl) + 子视图 + 可选的录入表单弹窗
  *
  * @returns 生长记录模块的完整页面结构
  */
@@ -100,21 +108,12 @@ export function GrowthContainer() {
         </div>
 
         {/* 第二行：视图切换标签（记录 / 曲线 / 分析） */}
-        <div className={styles.viewToggle}>
-          {([
-            { key: 'list', label: '记录' },
-            { key: 'chart', label: '曲线' },
-            { key: 'analysis', label: '分析' },
-          ] as const).map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setViewMode(key)}
-              className={`${styles.viewTab} ${viewMode === key ? styles.active : styles.inactive}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          items={VIEW_MODES}
+          value={viewMode}
+          onChange={setViewMode}
+          ariaLabel="视图切换"
+        />
       </div>
 
       {/* ---- 视图内容区 ---- */}
@@ -133,7 +132,11 @@ export function GrowthContainer() {
         )}
         {/* 分析视图：AI 驱动的生长评估 */}
         {viewMode === 'analysis' && (
-          <GrowthAnalysis childId={selectedChild.childId} childName={selectedChild.name} />
+          <GrowthAnalysis
+            childId={selectedChild.childId}
+            childName={selectedChild.name}
+            recordCount={selectedChild.records?.length || 0}
+          />
         )}
       </div>
 

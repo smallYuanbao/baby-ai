@@ -7,7 +7,9 @@
  * 服务端多租户隔离——不同用户看不到彼此的宝宝档案 / 上传文件。
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Select } from 'antd';
+import { LoadingState } from '../shared/LoadingState';
 import { getCurrentUserKey, setApiKey } from '../../services/api';
 import styles from './Header.module.less';
 
@@ -26,16 +28,36 @@ const USERS: { key: string; label: string }[] = [
  */
 export function Header() {
   const [currentKey, setCurrentKey] = useState(getCurrentUserKey());
+  /** 是否正在切换用户（切换会整页刷新，见 handleSwitch 的说明）。 */
+  const [switching, setSwitching] = useState(false);
 
   /**
-   * 切换登录用户：更新 api 层的 key 并刷新页面，
-   * 让各容器重新以新身份拉取数据（隔离边界在服务端）。
+   * 切换登录用户。
+   *
+   * 实现上是**整页刷新**：api key 存在模块级变量里，改它不会触发任何 React 更新，
+   * 各容器的数据也就不会重新拉。刷新是最省事的做法，但代价是**刷新期间应用内完全没有反馈**
+   * —— 页面直接白掉，只有浏览器自己的那个小转圈，用户不知道发生了什么。
+   *
+   * 所以先切到一个"正在切换"的全屏遮罩，**等它真的画出来之后**再刷新。
+   * 刷新动作放在 effect 里而不是直接调用：effect 在提交并绘制之后才跑，
+   * 直接调 reload 会抢在渲染前执行，遮罩根本来不及显示。
    */
   const handleSwitch = (key: string) => {
+    if (key === currentKey) return;   // 选中的还是当前用户，不必刷新
     setApiKey(key);
     setCurrentKey(key);
-    window.location.reload();
+    setSwitching(true);
   };
+
+  useEffect(() => {
+    if (!switching) return;
+    // **必须给一点延时，否则遮罩等于没有。**
+    // React 的 effect 在提交并绘制之后才跑，所以遮罩确实会被画出来 —— 但紧接着
+    // 浏览器就跳走了，它只存在一帧（~16ms），用户眼里就是"页面直接白了"。
+    // 400ms 是让人能看清"正在切换用户"这句话、又不至于觉得卡的时长。
+    const timer = setTimeout(() => window.location.reload(), 400);
+    return () => clearTimeout(timer);
+  }, [switching]);
 
   return (
     <header className={styles.header}>
@@ -67,20 +89,31 @@ export function Header() {
           <h1 className={styles.title}>育儿AI助手</h1>
           <p className={styles.subtitle}>用科学知识陪伴宝宝成长 🧸</p>
         </div>
-        {/* 用户切换：方案 A 轻量鉴权 demo 的入口 */}
-        <select
+        {/*
+          用户切换：方案 A 轻量鉴权 demo 的入口。
+
+          从原生 `<select>` 换成 antd `Select`，原因是**原生的展开列表根本没法用 CSS 控制** ——
+          外框能靠 appearance:none 自绘，但点开后的那层弹层是浏览器/系统画的：
+          深色底、蓝色高亮、系统圆角，跟这套暖色设计完全不是一路（截图里非常突兀）。
+        */}
+        <Select
           className={styles.userSwitcher}
           value={currentKey}
-          onChange={(e) => handleSwitch(e.target.value)}
+          onChange={handleSwitch}
+          options={USERS.map((u) => ({ value: u.key, label: u.label }))}
+          size="small"
           aria-label="切换登录用户"
-        >
-          {USERS.map((u) => (
-            <option key={u.key} value={u.key}>
-              {u.label}
-            </option>
-          ))}
-        </select>
+          // 弹层宽度跟内容走，不要被撑成跟触发器一样宽
+          popupMatchSelectWidth={false}
+        />
       </div>
+
+      {/* 切换用户时的全屏遮罩：刷新是整页级的，所以覆盖层也要铺满整个视口 */}
+      {switching && (
+        <div className={styles.switchOverlay}>
+          <LoadingState text="正在切换用户，重新加载数据…" />
+        </div>
+      )}
     </header>
   );
 }

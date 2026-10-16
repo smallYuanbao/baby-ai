@@ -1,285 +1,260 @@
 /**
- * GrowthRecordForm – 成长记录表单组件
+ * GrowthRecordForm – 成长记录表单（新增 / 编辑）
  *
- * 以底部面板（Bottom Sheet）形式呈现，支持添加新记录和编辑已有记录。
- * 覆盖身高、体重、头围、睡眠、喂养、尿布、备注等成长指标。
+ * 用 antd `Modal` + `Form` 实现。覆盖身高、体重、头围、睡眠、喂养、尿布、备注。
  *
- * 数据流：
- * - 新建模式：childId + EMPTY_FORM → useGrowth().addRecord
- * - 编辑模式：childId + record (GrowthRecord | null) → useGrowth().updateRecord
+ * ## 为什么从自研遮罩换成了 antd Modal
+ *
+ * 原来是一个自己写的 `div` 遮罩 + 底部面板。换成 antd 之后**顺带补上了一批本该有的行为**，
+ * 这些不是"换皮"，是实打实的缺陷修复：
+ *
+ * | | 自研遮罩（旧） | antd Modal（新） |
+ * |---|---|---|
+ * | Esc 关闭 | ❌ 没有 keydown 监听 | ✅ 默认支持 |
+ * | 焦点陷阱 | ❌ Tab 会跑到遮罩后面 | ✅ 默认支持 |
+ * | 挂载位置 | ❌ 原地渲染，靠 `position:fixed` 撑；祖先一加 `transform` 就会被剪切 | ✅ `createPortal` 到 body |
+ * | 滚动锁定 | ❌ 没有 | ✅ 默认支持 |
+ * | 点遮罩 | ❌ 直接关闭，**已填内容全丢** | ✅ 设了 `maskClosable={false}` |
+ * | 无障碍 | ❌ 零 `aria-*` / `role` | ✅ 内建 `role="dialog"` |
+ *
+ * ## 数据流
+ * - 新建：`record = null` → `useGrowth().addRecord`
+ * - 编辑：`record` 有值 → `useGrowth().updateRecord`
  *
  * @module GrowthRecordForm
  */
 
 import { useState } from 'react';
+import { Button, Col, DatePicker, Form, Input, InputNumber, Modal, Row, Select } from 'antd';
+import dayjs, { type Dayjs } from 'dayjs';
 import { useGrowth } from '../../hooks/useGrowth';
 import type { GrowthRecord } from '../../types/growth';
-import styles from './GrowthRecordForm.module.less';
 
-/**
- * GrowthRecordForm 组件的 props
- */
+/** 表单字段值。`InputNumber` 直接产出 number，不再需要手工 `parseFloat`。 */
+interface FormValues {
+  date: Dayjs;
+  height?: number | null;
+  weight?: number | null;
+  headCircumference?: number | null;
+  sleepDuration?: number | null;
+  diapers?: number | null;
+  feedingType: string;
+  feedingAmount?: number | null;
+  feedingUnit: string;
+  notes?: string;
+}
+
 interface GrowthRecordFormProps {
   /** 当前宝宝的唯一标识 */
   childId: string;
   /** 编辑模式下传入的已有记录；新建模式下为 null */
   record: GrowthRecord | null;
-  /** 关闭面板的回调（点击遮罩层、关闭按钮或取消按钮时触发） */
+  /** 关闭面板的回调（取消按钮 / 右上角 ✕ / Esc 触发） */
   onClose: () => void;
   /** 保存成功后的回调，通常用于刷新父组件列表 */
   onSaved: () => void;
 }
 
-/** 新建记录时的默认表单初始值 */
-const EMPTY_FORM = {
-  date: new Date().toISOString().slice(0, 10),
-  height: '',
-  weight: '',
-  headCircumference: '',
-  sleepDuration: '',
-  diapers: '',
-  feedingType: 'breast' as string,
-  feedingAmount: '',
-  feedingUnit: 'ml',
-  notes: '',
-};
+/** 喂养类型的选项（原来是写在 `<select>` 里的四个 `<option>`）。 */
+const FEEDING_TYPES = [
+  { value: 'breast', label: '母乳' },
+  { value: 'formula', label: '配方奶' },
+  { value: 'solid', label: '辅食' },
+  { value: 'mixed', label: '混合' },
+];
+
+/** 喂养量的单位选项。 */
+const FEEDING_UNITS = [
+  { value: 'ml', label: 'ml' },
+  { value: 'oz', label: 'oz' },
+  { value: 'g', label: 'g' },
+  { value: '次', label: '次' },
+];
 
 /**
- * 成长记录表单组件
+ * 把 `record`（或"新建"）转成表单初始值。
  *
- * 以受控表单方式收集宝宝成长数据。内部根据 `record` prop 判断模式：
- * - `record` 为 null → 新建模式
- * - `record` 有值 → 编辑模式
+ * 数值字段不再转成字符串 —— `InputNumber` 直接吃 number。
+ * 只要把日期字符串转成 Dayjs（DatePicker 要求）。
+ */
+function toInitialValues(record: GrowthRecord | null): FormValues {
+  if (!record) {
+    return {
+      date: dayjs(),
+      feedingType: 'breast',
+      feedingUnit: 'ml',
+    };
+  }
+  return {
+    date: dayjs(record.date),
+    height: record.height ?? undefined,
+    weight: record.weight ?? undefined,
+    headCircumference: record.headCircumference ?? undefined,
+    sleepDuration: record.sleepDuration ?? undefined,
+    diapers: record.diapers ?? undefined,
+    feedingType: record.feeding?.type || 'breast',
+    feedingAmount: record.feeding?.amount ?? undefined,
+    feedingUnit: record.feeding?.unit || 'ml',
+    notes: record.notes || '',
+  };
+}
+
+/**
+ * 成长记录表单组件。
  *
- * 提交时将字符串字段转换为数字类型，再调用对应的 hook 方法。
+ * 由父组件条件渲染（`GrowthContainer` 里的 `{showForm && <GrowthRecordForm/>}`），
+ * 所以挂载即打开 —— `open` 恒为 true，关闭时由父组件卸载。
  */
 export function GrowthRecordForm({ childId, record, onClose, onSaved }: GrowthRecordFormProps) {
   const { addRecord, updateRecord } = useGrowth();
+  const [form] = Form.useForm<FormValues>();
 
-  // 根据编辑/新建模式初始化表单状态
-  const [form, setForm] = useState(
-    record
-      // 编辑模式：将 GrowthRecord 的数值字段转为字符串，方便 input 绑定
-      ? {
-          date: record.date,
-          height: record.height?.toString() || '',
-          weight: record.weight?.toString() || '',
-          headCircumference: record.headCircumference?.toString() || '',
-          sleepDuration: record.sleepDuration?.toString() || '',
-          diapers: record.diapers?.toString() || '',
-          feedingType: record.feeding?.type || 'breast',
-          feedingAmount: record.feeding?.amount?.toString() || '',
-          feedingUnit: record.feeding?.unit || 'ml',
-          notes: record.notes || '',
-        }
-      : EMPTY_FORM
-  );
-
-  // 保存中的 loading 状态，用于禁用按钮防重复提交
+  /** 保存中：禁用按钮防重复提交。 */
   const [saving, setSaving] = useState(false);
 
   /**
-   * 表单提交处理
+   * 提交（由 antd Form 在校验通过后调用）。
    *
-   * 1. 阻止默认提交行为
-   * 2. 将字符串字段按需转换为 number（parseFloat / parseInt）
-   * 3. 根据模式调用 addRecord 或 updateRecord
-   * 4. 通知父组件保存完成
+   * 校验（必填日期、数值范围）交给 `Form.Item` 的 rules 和 `InputNumber` 的 min/max，
+   * 这里只做数据整形。
    */
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleFinish = async (values: FormValues) => {
     setSaving(true);
 
-    // 构建提交数据，只包含必填字段
     const data: any = {
-      date: form.date,
-      notes: form.notes || undefined,
+      date: values.date.format('YYYY-MM-DD'),
+      notes: values.notes || undefined,
     };
 
-    // 仅当有值时添加数值字段，避免提交空字符串
-    if (form.height) data.height = parseFloat(form.height);
-    if (form.weight) data.weight = parseFloat(form.weight);
-    if (form.headCircumference) data.headCircumference = parseFloat(form.headCircumference);
-    if (form.sleepDuration) data.sleepDuration = parseFloat(form.sleepDuration);
-    if (form.diapers) data.diapers = parseInt(form.diapers, 10);
+    // 只带上填了的数值字段，避免提交空值。
+    // 注意判 `!= null` 而不是真值判断 —— 数字 0 是合法值（比如睡眠 0 小时）。
+    if (values.height != null) data.height = values.height;
+    if (values.weight != null) data.weight = values.weight;
+    if (values.headCircumference != null) data.headCircumference = values.headCircumference;
+    if (values.sleepDuration != null) data.sleepDuration = values.sleepDuration;
+    if (values.diapers != null) data.diapers = values.diapers;
 
-    // 喂养信息作为嵌套对象提交
-    if (form.feedingAmount) {
+    if (values.feedingAmount != null) {
       data.feeding = {
-        type: form.feedingType,
-        amount: parseFloat(form.feedingAmount),
-        unit: form.feedingUnit,
+        type: values.feedingType,
+        amount: values.feedingAmount,
+        unit: values.feedingUnit,
       };
     }
 
     try {
       if (record) {
-        // 编辑模式：更新已有记录
         await updateRecord(childId, record.id, data);
       } else {
-        // 新建模式：添加新记录
         await addRecord(childId, data);
       }
       onSaved();
-    } catch { /* hook 已处理错误 */ }
+    } catch {
+      /* hook 内部已处理错误提示 */
+    }
 
-    // 无论成功失败都恢复按钮状态，避免 UI 卡死
     setSaving(false);
   };
 
   return (
-    /* 遮罩层 — 点击关闭面板 */
-    <div className={styles.overlay} onClick={onClose}>
-      {/* 面板主体 — 阻止事件冒泡，防止点击面板内部时关闭 */}
-      <div
-        className={`${styles.panel} animate-slide-up`}
-        onClick={(e) => e.stopPropagation()}
+    <Modal
+      open
+      title={record ? '编辑记录' : '添加成长记录'}
+      onCancel={onClose}
+      footer={null}
+      width={520}
+        // antd 6 的 Modal **没有 `top` 这个 prop**（v5 有、v6 移除了），
+        // 但 `.ant-modal` 上仍带着 `top: 100px`。用 style 覆盖成更小的值：
+        // 日期面板高 361px，加上弹窗内它上方的 182px 内容，100px 的偏移需要
+        // 643px 视口才放得下 —— 矮窗口下面板会被顶出屏幕。48px 后 600px 也够。
+        style={{ top: 48 }}
+      /*
+        不加 `centered`：原因同 ChildSelector —— 居中会让日期面板无处可放，
+        矮窗口下会向上弹出屏幕（详见该文件里的说明）。
+        点遮罩不关闭。原来的自研遮罩是 `onClick={onClose}` —— 填了一半手一滑点到旁边，
+        内容直接没了，而且没有任何二次确认。要关就点「取消」或右上角 ✕（Esc 也行）。
+      */
+      maskClosable={false}
+    >
+      <Form<FormValues>
+        form={form}
+        layout="vertical"
+        initialValues={toInitialValues(record)}
+        onFinish={handleFinish}
+        // 关掉 antd 自带的滚动到错误项（弹窗本身不高，滚动会让视野跳动）
+        scrollToFirstError={false}
       >
-        {/* 头部区域：标题 + 关闭按钮 */}
-        <div className={styles.header}>
-          <h3 className={styles.headerTitle}>
-            {record ? '编辑记录' : '添加成长记录'}
-          </h3>
-          <button onClick={onClose} className={styles.closeButton}>✕</button>
+        <Form.Item
+          name="date"
+          label="日期"
+          rules={[{ required: true, message: '请选择日期' }]}
+        >
+          <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+        </Form.Item>
+
+        <Row gutter={12}>
+          <Col span={12}>
+            <Form.Item name="height" label="身高 (cm)">
+              <InputNumber min={30} max={180} step={0.1} placeholder="如: 65.0" style={{ width: '100%' }} />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item name="weight" label="体重 (kg)">
+              <InputNumber min={1} max={100} step={0.1} placeholder="如: 7.2" style={{ width: '100%' }} />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={12}>
+          <Col span={12}>
+            <Form.Item name="headCircumference" label="头围 (cm)">
+              <InputNumber min={20} max={80} step={0.1} placeholder="如: 42.0" style={{ width: '100%' }} />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item name="sleepDuration" label="睡眠 (小时/天)">
+              <InputNumber min={0} max={24} step={0.5} placeholder="如: 14" style={{ width: '100%' }} />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Form.Item label="喂养">
+          <Row gutter={12}>
+            <Col span={10}>
+              <Form.Item name="feedingType" noStyle>
+                <Select options={FEEDING_TYPES} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="feedingAmount" noStyle>
+                <InputNumber min={0} step={10} placeholder="数量" style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item name="feedingUnit" noStyle>
+                <Select options={FEEDING_UNITS} />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Form.Item>
+
+        <Form.Item name="diapers" label="尿布更换 (次/天)">
+          <InputNumber min={0} max={50} placeholder="如: 8" style={{ width: '100%' }} />
+        </Form.Item>
+
+        <Form.Item name="notes" label="备注">
+          <Input.TextArea rows={2} placeholder="今天宝宝的特别表现..." />
+        </Form.Item>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Button onClick={onClose} disabled={saving}>
+            取消
+          </Button>
+          <Button type="primary" htmlType="submit" loading={saving}>
+            保存记录
+          </Button>
         </div>
-
-        <form onSubmit={handleSubmit} className={styles.form}>
-          {/* 日期 */}
-          <div>
-            <label className={styles.label}>日期</label>
-            <input
-              type="date" required
-              value={form.date}
-              onChange={(e) => setForm({ ...form, date: e.target.value })}
-              className={styles.input}
-            />
-          </div>
-
-          {/* 身高 + 体重 — 双列网格布局 */}
-          <div className={styles.grid2}>
-            <div>
-              <label className={styles.label}>身高 (cm)</label>
-              <input
-                type="number" step="0.1" min="30" max="180"
-                value={form.height}
-                onChange={(e) => setForm({ ...form, height: e.target.value })}
-                placeholder="如: 65.0"
-                className={styles.input}
-              />
-            </div>
-            <div>
-              <label className={styles.label}>体重 (kg)</label>
-              <input
-                type="number" step="0.1" min="1" max="100"
-                value={form.weight}
-                onChange={(e) => setForm({ ...form, weight: e.target.value })}
-                placeholder="如: 7.2"
-                className={styles.input}
-              />
-            </div>
-          </div>
-
-          {/* 头围 + 睡眠 — 双列网格布局 */}
-          <div className={styles.grid2}>
-            <div>
-              <label className={styles.label}>头围 (cm)</label>
-              <input
-                type="number" step="0.1" min="20" max="80"
-                value={form.headCircumference}
-                onChange={(e) => setForm({ ...form, headCircumference: e.target.value })}
-                placeholder="如: 42.0"
-                className={styles.input}
-              />
-            </div>
-            <div>
-              <label className={styles.label}>睡眠 (小时/天)</label>
-              <input
-                type="number" step="0.5" min="0" max="24"
-                value={form.sleepDuration}
-                onChange={(e) => setForm({ ...form, sleepDuration: e.target.value })}
-                placeholder="如: 14"
-                className={styles.input}
-              />
-            </div>
-          </div>
-
-          {/* 喂养 — 三列：类型 / 数量 / 单位 */}
-          <div>
-            <label className={styles.label}>喂养</label>
-            <div className={styles.grid3}>
-              <select
-                value={form.feedingType}
-                onChange={(e) => setForm({ ...form, feedingType: e.target.value })}
-                className={styles.select}
-              >
-                <option value="breast">母乳</option>
-                <option value="formula">配方奶</option>
-                <option value="solid">辅食</option>
-                <option value="mixed">混合</option>
-              </select>
-              <input
-                type="number" step="10" min="0"
-                value={form.feedingAmount}
-                onChange={(e) => setForm({ ...form, feedingAmount: e.target.value })}
-                placeholder="数量"
-                className={styles.input}
-              />
-              <select
-                value={form.feedingUnit}
-                onChange={(e) => setForm({ ...form, feedingUnit: e.target.value })}
-                className={styles.select}
-              >
-                <option value="ml">ml</option>
-                <option value="oz">oz</option>
-                <option value="g">g</option>
-                <option value="次">次</option>
-              </select>
-            </div>
-          </div>
-
-          {/* 尿布 */}
-          <div>
-            <label className={styles.label}>尿布更换 (次/天)</label>
-            <input
-              type="number" min="0" max="50"
-              value={form.diapers}
-              onChange={(e) => setForm({ ...form, diapers: e.target.value })}
-              placeholder="如: 8"
-              className={styles.input}
-            />
-          </div>
-
-          {/* 备注 */}
-          <div>
-            <label className={styles.label}>备注</label>
-            <textarea
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              placeholder="今天宝宝的特别表现..."
-              rows={2}
-              className={styles.textarea}
-            />
-          </div>
-
-          {/* 操作按钮 — 取消 + 保存 */}
-          <div className={styles.actions}>
-            <button
-              type="button"
-              onClick={onClose}
-              className={styles.cancelButton}
-            >
-              取消
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className={styles.saveButton}
-            >
-              {saving ? '保存中...' : '保存记录'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </Form>
+    </Modal>
   );
 }

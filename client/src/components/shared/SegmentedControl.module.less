@@ -1,0 +1,124 @@
+@import '../../styles/variables.less';
+
+// ============================================================
+//  SegmentedControl — 分段控件（两组互斥选项，等宽/横排切换）
+//
+//  两个 variant：
+//    · pill（默认）—— 有轨道底色的药丸组，用于**主级**导航（如记录/曲线/分析）
+//    · underline   —— 纯文字 + 选中项下划线，用于**子级**选项（如体重/身高/头围）
+//
+//  为什么要有第二个 variant：成长页曾经上下摆着两排**一模一样**的药丸组，
+//  用户的原话是"看起来有两个 Tab 在一起"。同一种控件叠两层，无论怎么调大小
+//  都还是同一种东西；换成下划线标签是换了个"种类"，层级一眼就分得开。
+//
+//  下面是几条踩出来的约束，别随手改：
+//
+//  1. **药丸组必须限宽**。原来两组都是 flex:1 且没有上限，桌面上被拉满整个视口
+//     —— 实测 1440px 宽下每个分段 420px，12px 的标签飘在 420px 的色块里，
+//     既看不出是按钮、也看不出哪个被选中。22rem 下每段约 117px 才是正常比例。
+//
+//  2. **药丸组的轨道要看得见**。原来用 @gray-50(#f9fafb)，对纯白只有 1.045:1：
+//     轨道本身看不出来，坐在上面的激活态白药丸(白 vs 轨道同样 1.045:1)也认不出来，
+//     "选中"只能靠文字颜色。现在用 @surface-sunken(1.207:1，与 iOS 轨道同量级)。
+//
+//  3. **首尾两段的外侧圆角要跟轨道同心**（见下方 .tab:first-child 的说明）。
+// ============================================================
+
+// 圆角三者之间的关系是**算出来的** —— 必须满足：
+//   轨道半径 = 药丸外侧半径 + 内边距
+// 只有这样首尾两段选中时，药丸才能严丝合缝地嵌在槽里。
+@track-pad: 0.125rem;              // 2px  轨道内边距
+@track-radius: @radius-xl;         // 1rem 轨道圆角
+@pill-radius: 0.5rem;              // 8px  药丸在内侧的圆角
+// 注：radius 令牌表里只有 xl/2xl/3xl/full，没有 0.5rem 这一档，所以用字面量。
+// 别写成 @radius-lg —— 它不存在（这个坑在 TabBar 里踩过一次了）。
+
+// ---------------------------------------------------------------------------
+// 公共
+// ---------------------------------------------------------------------------
+
+.tab {
+  font-size: @text-xs;           // 12px
+  font-weight: 500;
+  transition: all 200ms;
+  cursor: pointer;
+  color: @gray-500;
+
+  &:hover {
+    color: @gray-700;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// variant: pill —— 主级导航
+// ---------------------------------------------------------------------------
+
+.track {
+  display: flex;
+  gap: 0.25rem;
+  width: 100%;
+  max-width: 22rem;              // ← 关键：不加就会被拉满整个视口
+  padding: @track-pad;
+  border-radius: @track-radius;
+  background: @surface-sunken;
+}
+
+.pillTab {
+  flex: 1;                       // 各段等宽
+  padding: 0.375rem 0;
+  border-radius: @pill-radius;   // 内侧用 8px，形成"药丸嵌在槽里"
+}
+
+// 首尾两段的**外侧**圆角必须跟轨道对齐。
+//
+// 踩过：外侧也用 8px 时，最左/最右选中会"戳出轨道" —— 轨道 16px 的圆弧在那儿拐弯，
+// 而药丸的方角只有 8px，于是药丸的角盖过曲线、露出一个多余的尖角（放大 8 倍看非常明显）。
+// 外侧半径 = 轨道半径 − 内边距（1rem − 0.125rem = 0.875rem），两条曲线正好同心。
+.pillTab:first-child {
+  border-top-left-radius: (@track-radius - @track-pad);
+  border-bottom-left-radius: (@track-radius - @track-pad);
+}
+
+.pillTab:last-child {
+  border-top-right-radius: (@track-radius - @track-pad);
+  border-bottom-right-radius: (@track-radius - @track-pad);
+}
+
+// 选中：白药丸抬起来。配合轨道底色，这是"选中"最主要的视觉线索。
+.active {
+  background: @white;
+  color: @primary-600;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+// ---------------------------------------------------------------------------
+// variant: underline —— 子级选项
+// ---------------------------------------------------------------------------
+
+.underlineTrack {
+  display: flex;
+  gap: 1.25rem;                  // 20px：纯文字之间靠间距分隔，不用背景块
+  border-bottom: 1px solid @primary-100;
+}
+
+.underlineTab {
+  position: relative;            // 给下划线做定位父级
+  padding: 0.375rem 0.125rem 0.5rem;
+}
+
+// 选中：橙色文字 + 下方短下划线。下划线压在容器那根分隔线上（bottom: -1px）。
+.activeUnderline {
+  color: @primary-600;
+  font-weight: 600;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 2px;
+    border-radius: 2px;
+    background: @primary-500;
+  }
+}

@@ -60,15 +60,11 @@ export function PlayMenu({ onSelect }: PlayMenuProps) {
           onClick={() => onSelect(item.mode)}
           className={`${styles.menuItem} ${styles[item.cardClass]}`}
         >
-          <div className={styles.menuItemInner}>
-            <span className={styles.menuIcon}>{item.icon}</span>
-            <div>
-              <h3 className={styles.menuTitle}>{item.title}</h3>
-              <p className={styles.menuDesc}>{item.desc}</p>
-            </div>
-            {/* 右侧箭头指示符 */}
-            <span className={styles.menuArrow}>→</span>
-          </div>
+          {/* 箭头放右上角：卡片改成竖排后，"右端"不再是一条可以用 margin-left:auto 推的轴 */}
+          <span className={styles.menuArrow} aria-hidden="true">→</span>
+          <span className={styles.menuIcon}>{item.icon}</span>
+          <h3 className={styles.menuTitle}>{item.title}</h3>
+          <p className={styles.menuDesc}>{item.desc}</p>
         </button>
       ))}
     </div>

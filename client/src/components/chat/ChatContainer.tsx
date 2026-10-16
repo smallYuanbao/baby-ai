@@ -64,7 +64,8 @@ export function ChatContainer() {
     return [];
   }, [messages]);
 
-  /** 是否至少问过一次（存在助手消息，含正在生成的那条占位）。 */
+  /** 是否至少问过一次（存在助手消息，含正在生成的那条占位）。
+   *  注意要和 isStreaming 配合看：流式期间引用为空是正常的中间态（见 ReferencePanel）。 */
   const hasAnswered = useMemo(
     () => messages.some((m) => m.role === 'assistant'),
     [messages],
@@ -161,7 +162,7 @@ export function ChatContainer() {
       />
       </div>
 
-      <ReferencePanel references={latestReferences} answered={hasAnswered} />
+      <ReferencePanel references={latestReferences} isStreaming={isStreaming} hasAnswer={hasAnswered} />
     </div>
   );
 }
