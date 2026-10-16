@@ -560,7 +560,8 @@ baby-ai/
 | **权威指南提炼** | 🔴 待做 | 下载 AAP / 中华医学会儿科分会公开指南 PDF → 拆段 → DeepSeek 提炼 Q&A → 灌库。详见「灌入知识库 → 途径 3」 |
 | **用户认证系统** | 🟡 部分 | 方案 A 已打通「应用层鉴权 + 多租户隔离」（API Key → user_id，全查询 `WHERE user_id=?` 过滤，见 `app/core/auth.py`）；完整的登录/注册 + JWT 签发刷新待补 |
 | **对话持久化存储** | ✅ 已实现 | 会话历史已落盘 SQLite（`data/sessions.db`），服务重启不丢，按 `user_id + session_id` 隔离，保留最近 10 轮 |
-| **跨会话记忆** | ✅ 已实现 | LLM 提取关键信息（宝宝月龄、过敏史、关注主题）→ 灌入长期记忆库 → 新会话检索注入（`app/services/memory/user_profile.py`） |
+| **跨会话记忆** | 🟡 部分 | `user_profile.py` 的提取 / 保存 / 读取都写好了，但**只接在 `/api/agent/unified` 上**，而前端不调该端点 —— 主聊天链路（`/api/chat/stream`）并没有注入。详见 [docs/todo.md](docs/todo.md) 第 1 条 |
+| **聊天与成长数据联动** | 🔴 待做 | 让 AI 知道用户录入的宝宝月龄 / 身高体重。聊天链路目前完全没有这些数据（`profile_text` 参数已就位但没传）。方案与三条边界见 [docs/todo.md](docs/todo.md) 第 1 条 |
 | **自动化测试** | 🟡 部分 | 后端 pytest 已覆盖 62 例（growth/play/cache/熔断/session 持久化/流式预算与取消等）；前端 Vitest 待补 |
 | **移动端适配** | 🟡 中 | 前端当前以桌面端为主，移动端仅在 `index.html` 设置了 viewport，部分组件在窄屏下体验待优化 |
 | **多语言支持** | 🟢 低 | 目前仅支持中文，包括 UI 文案和 AI 回复。后续可通过 i18n 扩展英文等多语言 |
