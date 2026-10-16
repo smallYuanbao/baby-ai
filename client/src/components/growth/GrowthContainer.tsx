@@ -2,20 +2,31 @@
  * @fileoverview GrowthContainer — 生长记录模块的顶层容器组件。
  *
  * 职责：
- * - 管理“当前选中宝宝”的状态（selectedChild）以及子视图模式（列表/曲线/分析）。
- * - 当未选中任何宝宝时渲染 ChildSelector 供用户选择或创建宝宝。
- * - 选中宝宝后展示工具栏、视图切换标签和对应子视图，
- *   并提供 GrowthRecordForm 弹窗用于新增或编辑生长记录。
+ * - 挂载 `GrowthProvider`，让整个成长模块的组件共用同一份状态。
+ * - 管理子视图模式（列表/曲线/分析）与录入弹窗的开关。
+ * - 未选中宝宝时渲染 ChildSelector，选中后展示工具栏、视图切换和各子视图。
+ *
+ * ## 为什么这里要包一层 Provider
+ *
+ * 状态实现（`hooks/useGrowthState.ts`）内部是 `useState`，而 `useState` 跟着组件实例走 ——
+ * 每个调用点各持一份。之前模块里三个组件各调一次，于是 `addRecord()` 里那句
+ * 「刷新 selectedChild」刷新的是**表单自己那份没人渲染的副本**，表现就是
+ * 「新增记录后列表不更新，要刷新页面才看得到」。
+ *
+ * 现在 Provider 在这里调用**一次**状态实现，整棵树通过 `useGrowth()` 读同一份。
+ * 拆成 `GrowthContainer`（只挂 Provider）+ `GrowthScreen`（真正的界面）两个组件，
+ * 是因为**同一个组件不能既提供又消费自己的 context**。
  */
 
 import { useState } from 'react';
 import { SegmentedControl, type SegmentedControlItem } from '../shared/SegmentedControl';
+import { GrowthProvider, useGrowth } from '../../contexts/GrowthContext';
 import { ChildSelector } from './ChildSelector';
 import { GrowthRecordForm } from './GrowthRecordForm';
 import { GrowthRecordList } from './GrowthRecordList';
 import { GrowthChart } from './GrowthChart';
 import { GrowthAnalysis } from './GrowthAnalysis';
-import type { Child, GrowthRecord } from '../../types/growth';
+import type { GrowthRecord } from '../../types/growth';
 import styles from './GrowthContainer.module.less';
 
 /** 视图模式：列表视图 / 生长曲线图 / AI 分析 */
@@ -29,19 +40,30 @@ const VIEW_MODES: readonly SegmentedControlItem<ViewMode>[] = [
 ];
 
 /**
- * GrowthContainer 组件
+ * 成长模块的入口组件。
  *
- * 作为 growth 模块的路由级容器，持有模块级状态并根据状态驱动子组件渲染。
- * 组件树概览：
- * - 未选中宝宝 → ChildSelector
- * - 已选中宝宝 → 工具栏 (toolbar) + 视图切换 (SegmentedControl) + 子视图 + 可选的录入表单弹窗
+ * 只负责把状态 Provider 挂到模块根部，界面交给 `GrowthScreen`。
  *
- * @returns 生长记录模块的完整页面结构
+ * @returns 包了 Provider 的成长模块组件树
  */
 export function GrowthContainer() {
-  // ---- 模块级状态 ----
-  /** 当前选中的宝宝；null 表示尚未选择 */
-  const [selectedChild, setSelectedChild] = useState<Child | null>(null);
+  return (
+    <GrowthProvider>
+      <GrowthScreen />
+    </GrowthProvider>
+  );
+}
+
+/**
+ * 成长模块的界面。
+ *
+ * 从共享状态里读 `selectedChild` —— 它由两个地方写入：ChildSelector 点卡片时的
+ * `loadChild()`，以及各 mutation 成功后 hook 内部的自动刷新。因为是同一份 state，
+ * 写完立刻反映到这里，不需要手动通知。
+ */
+function GrowthScreen() {
+  const { selectedChild, clearSelectedChild } = useGrowth();
+
   /** 当前激活的子视图：列表 / 曲线 / 分析 */
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   /** 是否展示录入表单弹窗 */
@@ -53,10 +75,7 @@ export function GrowthContainer() {
   if (!selectedChild) {
     return (
       <div className={styles.wrapper}>
-        <ChildSelector
-          selectedChild={selectedChild}
-          onSelect={setSelectedChild}
-        />
+        <ChildSelector />
       </div>
     );
   }
@@ -81,7 +100,13 @@ export function GrowthContainer() {
     setEditingRecord(null);
   };
 
-  /** 表单保存成功后的回调：关闭表单并清空编辑缓存 */
+  /**
+   * 表单保存成功后的回调。
+   *
+   * 这里**只关表单** —— 数据刷新由 hook 内部的 mutation 完成
+   * （`addRecord` / `updateRecord` 成功后都会 `loadChild()`）。
+   * 共用同一份状态之后，那次刷新才会真正更新到这个组件渲染的列表。
+   */
   const handleFormSaved = () => {
     setShowForm(false);
     setEditingRecord(null);
@@ -93,15 +118,10 @@ export function GrowthContainer() {
       <div className={styles.toolbar}>
         {/* 第一行：返回按钮、宝宝姓名、记录数 */}
         <div className={styles.toolbarRow}>
-          <button
-            onClick={() => setSelectedChild(null)}
-            className={styles.backButton}
-          >
+          <button onClick={clearSelectedChild} className={styles.backButton}>
             ← 切换宝宝
           </button>
-          <span className={styles.childName}>
-            {selectedChild.name}
-          </span>
+          <span className={styles.childName}>{selectedChild.name}</span>
           <span className={styles.recordCount}>
             {selectedChild.records?.length || 0} 条记录
           </span>

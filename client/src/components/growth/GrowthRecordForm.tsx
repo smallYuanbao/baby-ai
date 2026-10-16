@@ -27,7 +27,7 @@
 import { useState } from 'react';
 import { Button, Col, DatePicker, Form, Input, InputNumber, Modal, Row, Select } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
-import { useGrowth } from '../../hooks/useGrowth';
+import { useGrowth } from '../../contexts/GrowthContext';
 import type { GrowthRecord } from '../../types/growth';
 
 /** 表单字段值。`InputNumber` 直接产出 number，不再需要手工 `parseFloat`。 */

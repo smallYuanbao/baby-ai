@@ -15,18 +15,9 @@ import {
   Button, DatePicker, Form, Input, Modal, Popconfirm, Radio,
 } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
-import { useGrowth } from '../../hooks/useGrowth';
-import { api } from '../../services/api';
+import { useGrowth } from '../../contexts/GrowthContext';
 import { LoadingState } from '../shared/LoadingState';
-import type { Child } from '../../types/growth';
 import styles from './ChildSelector.module.less';
-
-interface ChildSelectorProps {
-  /** 当前选中的宝宝，可为 null 表示未选择 */
-  selectedChild: Child | null;
-  /** 选中宝宝时的回调，传入被选中的 Child 对象 */
-  onSelect: (child: Child) => void;
-}
 
 /** 「添加宝宝」表单的字段值。 */
 interface CreateChildValues {
@@ -39,9 +30,12 @@ interface CreateChildValues {
  * 宝宝选择器组件。
  *
  * 首次挂载时自动加载宝宝列表，加载中显示 LoadingState。
+ *
+ * **不需要 props**：选中哪个宝宝由 `GrowthProvider` 里的共享状态决定，
+ * 点卡片时直接 `loadChild()` 写进那份状态（见 contexts/GrowthContext.tsx）。
  */
-export function ChildSelector({ onSelect }: ChildSelectorProps) {
-  const { children, loading, loadChildren, createChild, deleteChild } = useGrowth();
+export function ChildSelector() {
+  const { children, loading, loadChildren, createChild, deleteChild, loadChild } = useGrowth();
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   /**
@@ -79,7 +73,9 @@ export function ChildSelector({ onSelect }: ChildSelectorProps) {
         gender: values.gender,
       });
       if (child) {
-        onSelect(child);
+        // 新建完直接进这个宝宝的详情页。走 loadChild 而不是拿 createChild 的返回值凑合：
+        // 写入 selectedChild 只保留这一条路径，免得「有些入口带 records、有些不带」。
+        await loadChild(child.childId);
         closeForm();
       }
     } catch {
@@ -88,15 +84,13 @@ export function ChildSelector({ onSelect }: ChildSelectorProps) {
     setSubmitting(false);
   };
 
-  /** 选中某个宝宝：通过 API 获取完整 Child 对象后回调父组件。 */
+  /** 选中某个宝宝：拉取完整档案写进共享状态（列表 / 图表 / 分析一起更新）。 */
   const handleSelect = async (childId: string) => {
     setSelectingId(childId);
-    try {
-      const child = await api.growth.getChild(childId);
-      onSelect(child);
-    } catch {
-      /* ignore */
-    }
+    // 走 hook 的 loadChild,而不是在这里自己调 api.growth.getChild ——
+    // 后者是同一个请求的第二份实现,两处各写一遍,改了一处忘了另一处是迟早的事。
+    // loadChild 会把完整档案写进共享状态,所有消费者一起更新。
+    await loadChild(childId);
     setSelectingId(null);
   };
 

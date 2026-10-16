@@ -12,7 +12,7 @@ import { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { LoadingState } from '../shared/LoadingState';
 import { SegmentedControl } from '../shared/SegmentedControl';
-import { useGrowth } from '../../hooks/useGrowth';
+import { useGrowth } from '../../contexts/GrowthContext';
 import type { ChartDataResponse } from '../../types/growth';
 import styles from './GrowthChart.module.less';
 
