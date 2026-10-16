@@ -170,10 +170,13 @@ export function StoryTime({ onBack }: StoryTimeProps) {
           {/* Post-generation actions */}
           {done && (
             <div className={styles.storyActions}>
+              {/* 两个都是次要操作，统一用 secondary ——
+                  ghost 是透明底，白底上跟普通文字没有区别，看不出能点
+                  （和猜谜语页的「提示 / 换一题」是同一个问题）。 */}
               <Button onClick={handleGenerate} className={styles.fullWidth} variant="secondary">
                 🔄 再讲一个
               </Button>
-              <Button onClick={() => { setDone(false); setContent(''); }} className={styles.fullWidth} variant="ghost">
+              <Button onClick={() => { setDone(false); setContent(''); }} className={styles.fullWidth} variant="secondary">
                 换一个主题
               </Button>
             </div>

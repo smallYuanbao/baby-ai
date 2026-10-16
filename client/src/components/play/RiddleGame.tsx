@@ -101,7 +101,13 @@ export function RiddleGame({ onBack }: RiddleGameProps) {
       <div className={styles.topBar}>
         <button onClick={onBack} className={styles.backButton}>← 返回</button>
         <h3 className={styles.screenTitle}>🧩 猜谜语</h3>
-        <span className={styles.score}>{score}分</span>
+        {/*
+          得分：每答对一题 +10（见 handleGuess），**只存在这个组件的本地 state 里** ——
+          换一题、离开本屏都会归零，后端不存也不返回。
+          原来这里只渲染一个裸的 `{score}分`，界面上看不出这个数字是什么，
+          所以补上「得分」二字和底色，让它自己说明自己。
+        */}
+        <span className={styles.score}>🏆 得分 {score}</span>
       </div>
 
       <div className={styles.content}>
@@ -179,10 +185,15 @@ export function RiddleGame({ onBack }: RiddleGameProps) {
               <Button onClick={handleGuess} disabled={!guess.trim()}>猜！</Button>
             </div>
 
-            {/* Secondary actions: hint and new riddle */}
+            {/*
+              次要操作：提示 / 换一题。
+              原来是 variant="ghost"（透明底 + @gray-500 文字），在白底上就是一串普通文字，
+              完全看不出可以点。改用 secondary（@primary-50 底 + @primary-700 文字）：
+              有形状、又不跟上面那个实心橙的「猜！」抢主次。
+            */}
             <div className={styles.actionRow}>
-              <Button variant="ghost" onClick={handleHint} className={styles.flex1}>💡 提示</Button>
-              <Button variant="ghost" onClick={handleGetRiddle} className={styles.flex1}>🎲 换一题</Button>
+              <Button variant="secondary" onClick={handleHint} className={styles.flex1}>💡 提示</Button>
+              <Button variant="secondary" onClick={handleGetRiddle} className={styles.flex1}>🎲 换一题</Button>
             </div>
           </div>
         )}

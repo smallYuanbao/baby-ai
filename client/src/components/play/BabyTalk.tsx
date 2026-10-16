@@ -8,6 +8,7 @@
 
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { Select } from 'antd';
 import { usePlay } from '../../hooks/usePlay';
 import { Button } from '../shared/Button';
 import styles from './BabyTalk.module.less';
@@ -20,6 +21,14 @@ interface BabyTalkProps {
   /** 返回上一页的回调函数 */
   onBack: () => void;
 }
+
+/**
+ * 月龄下拉的候选项：0～36 个月里常被提到的那些。
+ *
+ * 抽成模块级常量是为了让 JSX 里只留一行 `<Select>` —— 之前这份数组是内联在
+ * `<select>` 里的，换成 antd 之后还要多包一层 `{ value, label }`，写在一起会糊成一片。
+ */
+const BABY_AGE_MONTHS = [0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 18, 24, 36];
 
 /**
  * BabyTalk 组件 — 婴语翻译功能的主界面。
@@ -87,16 +96,21 @@ export function BabyTalk({ onBack }: BabyTalkProps) {
             {/* 月龄选择 */}
             <div>
               <label className={styles.label}>宝宝月龄</label>
-              <select
+              {/*
+                用 antd 的 Select 而不是原生 <select>：
+                原生控件的**展开列表是浏览器/系统画的**，CSS 管不到 ——
+                深色底、系统蓝高亮、系统圆角，跟这套暖色设计完全不是一路；
+                聚焦时那圈蓝色 outline 也是同源问题（截图里很显眼）。
+                antd 的弹层由 theme.ts 统一接管，主色已经映射成品牌橙。
+                同样的替换在 Header.tsx 的用户切换器上做过一次。
+              */}
+              <Select
                 value={babyAge}
-                onChange={(e) => setBabyAge(parseInt(e.target.value))}
+                onChange={setBabyAge}
+                options={BABY_AGE_MONTHS.map((m) => ({ value: m, label: `${m} 个月` }))}
                 className={styles.select}
-              >
-                {/* 常见月龄选项：0–36 个月 */}
-                {[0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 18, 24, 36].map((m) => (
-                  <option key={m} value={m}>{m} 个月</option>
-                ))}
-              </select>
+                aria-label="宝宝月龄"
+              />
             </div>
 
             {/* 表现描述输入 */}
