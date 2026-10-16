@@ -33,7 +33,7 @@
  *
  * | Key                | Env override              | Default                  | Purpose |
  * |--------------------|---------------------------|--------------------------|---------|
- * | `config.port`      | `PORT`                    | `3001`                   | HTTP listen port. |
+ * | `config.port`      | `PORT`                    | `8020`                   | HTTP listen port. |
  * | `config.deepseek.apiKey` | `DEEPSEEK_API_KEY`  | _(required)_             | API key for the DeepSeek LLM provider. |
  * | `config.deepseek.baseUrl`| `DEEPSEEK_BASE_URL`  | `https://api.deepseek.com/v1` | Base URL for DeepSeek API calls. |
  * | `config.deepseek.model`  | `DEEPSEEK_MODEL`     | `deepseek-chat`          | Model ID sent in chat-completion requests. |

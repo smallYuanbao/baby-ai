@@ -4,13 +4,13 @@ services:
     build: .
     container_name: baby-ai-backend
     ports:
-      - "8002:8002"
+      - "8010:8010"
     environment:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - CHROMA_HOST=chroma
       - CHROMA_PORT=8000
       - OLLAMA_BASE_URL=http://ollama:11434
-      - RERANKER_URL=http://reranker:8001/rerank
+      - RERANKER_URL=http://reranker:8011/rerank
     depends_on:
       chroma:
         condition: service_started
@@ -41,11 +41,11 @@ services:
     build: ../reranker
     container_name: baby-ai-reranker
     ports:
-      - "8001:8001"
+      - "8011:8011"
     volumes:
       - hf_cache:/root/.cache/huggingface
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health')\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8011/health')\""]
       interval: 30s
       timeout: 10s
       retries: 3

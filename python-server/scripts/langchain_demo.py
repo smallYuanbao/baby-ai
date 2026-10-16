@@ -5,8 +5,11 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
-# 指定 .env 的绝对路径
-load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
+# 指定仓库根目录的 .env 的绝对路径。
+# 注意是**三级** dirname:scripts/ → python-server/ → 仓库根。
+# 原来只退两级,读的是 python-server/.env —— 那份已合并进根目录的 .env 并删除。
+# 两份并存时「改了没生效」就是这么来的,所以这里把路径写死。
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env"))
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL")

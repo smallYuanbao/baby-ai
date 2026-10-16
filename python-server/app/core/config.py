@@ -1,8 +1,20 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-# 加载环境变量
-load_dotenv()
+# 加载环境变量。
+#
+# ⚠️ 这里**显式指定仓库根目录的 .env**，不要改回裸的 `load_dotenv()`。
+#
+# 裸调用读的是「进程当前工作目录」下的 .env，于是同一份配置
+# 从仓库根启动就读根 .env、从 python-server/ 启动就读 python-server/.env ——
+# 而这两份文件内容并不一样（甚至各有一套 CHROMA_* 命名：根用 CHROMA_URL，
+# 这里用 CHROMA_HOST + CHROMA_PORT）。改了配置却没生效，通常就是这么来的。
+# 已经把两份合并成根目录这一份，并在代码里把路径钉死。
+#
+# 注：容器里运行时仓库根的 .env 不存在，load_dotenv 会静默跳过，
+# 配置由 docker compose 的 environment 提供 —— 行为不受影响。
+load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 
 # 获取DeepSeek相关环境变量
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
@@ -24,7 +36,7 @@ OLLAMA_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "bge-m3")
 
 QUERY_REWRITE_ENABLED = os.getenv("QUERY_REWRITE_ENABLED", "").lower() in ["true", "1", "yes"]
 
-RERANKER_URL = os.getenv("RERANKER_URL", "http://127.0.0.1:8001/rerank")
+RERANKER_URL = os.getenv("RERANKER_URL", "http://127.0.0.1:8011/rerank")
 
 
 # ---------- LLM 调用加固（超时 / 熔断 / 备用模型） ----------

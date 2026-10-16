@@ -90,10 +90,10 @@ export const config = {
   /**
    * HTTP 服务监听端口。
    *
-   * @default 3001
+   * @default 8020
    * @env PORT
    */
-  port: parseInt(process.env.PORT || '3001', 10),
+  port: parseInt(process.env.PORT || '8020', 10),
 
   // --------------------------------------------------------------------------
   // DeepSeek LLM

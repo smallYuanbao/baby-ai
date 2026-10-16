@@ -4,8 +4,9 @@ import os
 import requests
 from dotenv import load_dotenv
 
-# 加载 .env 中的环境变量（特别是 DEEPSEEK_API_KEY）
-load_dotenv()
+# 加载环境变量（特别是 DEEPSEEK_API_KEY）。
+# 显式指向仓库根的 .env —— 裸 load_dotenv() 读的是 cwd,换个目录启动就读到别的文件。
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env"))
 
 # ================= 配置区 =================
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")

@@ -43,7 +43,7 @@ Python 版是 Express 版的完整重构，增加了意图路由、混合检索(
 ```bash
 cd python-server
 source .venv/bin/activate
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8010
 ```
 
 详见 [python-server/README.md](python-server/README.md)
@@ -131,8 +131,8 @@ source venv/bin/activate
 # 安装依赖
 pip install -r requirements.txt
 
-# 启动服务（端口 8001）
-uvicorn server:app --host 0.0.0.0 --port 8001
+# 启动服务（端口 8011）
+uvicorn server:app --host 0.0.0.0 --port 8011
 ```
 
 > 使用 BAAI/bge-reranker-v2-m3 模型，提供 `/rerank` 和 `/health` 接口。
@@ -218,13 +218,49 @@ searchCollections: ['rag_samples', 'rag_medical'],  // 并行搜索这两个集�
 ### 7. 启动开发环境
 
 ```bash
-# 同时启动前后端
 npm run dev
-
-# 或分别启动
-npm run dev:server   # 后端 http://localhost:3001
-npm run dev:client   # 前端 http://localhost:5173
 ```
+
+一条命令起两个进程（`concurrently` 并行跑，用前缀区分输出）：
+
+```
+[api] INFO:     Uvicorn running on http://127.0.0.1:8010
+[web]   VITE v5.4.21  ready in 291 ms
+```
+
+启动前会**先跑一遍环境自检** `scripts/devguard.mjs`（Node 版本 / 端口占用 / 后端身份）。
+自检不通过就直接退出，不会让你带着一个错的环境去调业务代码。
+
+**也可以分开起：**
+
+```bash
+npm run dev:api      # 只起后端（FastAPI，8010）
+npm run dev:client   # 只起前端（Vite，5180）
+```
+
+> `dev:api` 直接用 `python-server/.venv/bin/python`，不需要先 `source activate`。
+> 这个路径是 Unix 写法，Windows 上要换成 `.venv/Scripts/python.exe`。
+
+**端口分配**（全机唯一一份，改端口前先看 `scripts/devguard.mjs` 顶部的表）：
+
+| 服务 | 端口 |
+|------|:---:|
+| 前端 (Vite) | 5180 |
+| 后端 (FastAPI) | 8010 |
+| 精排 (BGE reranker) | 8011 |
+| ChromaDB | 8000 |
+
+> ⚠️ **`npm run dev:legacy-server` 是老版 Express + TypeScript 后端**（端口 **8020**），
+> 不承担业务流量，保留只为对照阅读。日常开发不需要它。
+> 名字里的 `legacy` 是刻意的：它和上面的 `dev:api`（FastAPI，8010，就是本 README 描述的那个后端）
+> 只差一个词，一眼容易看错。**日常开发不要用它。**
+>
+> 端口被占用时 **Vite 会直接报错退出**（配置里开了 `strictPort`），
+> 不会像以前那样默默顺延到 5181、5182 —— 那种顺延正是
+> 「我打开 localhost:5180，看到的却是别的项目」的来源。
+>
+> 遇到任何"接口 404 / 连不上"的怪象，**先跑 `npm run doctor`**：
+> 它会告诉你每个端口上坐的是谁，以及是不是你要的那个服务。
 
 ## API 文档
 
@@ -234,14 +270,14 @@ npm run dev:client   # 前端 http://localhost:5173
 
 **流式请求**（默认）：
 ```bash
-curl -X POST http://localhost:3001/api/chat?stream=true \
+curl -X POST http://localhost:8010/api/chat?stream=true \
   -H "Content-Type: application/json" \
   -d '{"message": "宝宝发烧怎么办？"}'
 ```
 
 **非流式请求**：
 ```bash
-curl -X POST http://localhost:3001/api/chat?stream=false \
+curl -X POST http://localhost:8010/api/chat?stream=false \
   -H "Content-Type: application/json" \
   -d '{"message": "宝宝发烧怎么办？"}'
 ```
@@ -250,7 +286,7 @@ curl -X POST http://localhost:3001/api/chat?stream=false \
 
 文件上传接口：
 ```bash
-curl -X POST http://localhost:3001/api/upload \
+curl -X POST http://localhost:8010/api/upload \
   -F "file=@宝宝体检报告.pdf"
 ```
 
@@ -258,7 +294,7 @@ curl -X POST http://localhost:3001/api/upload \
 
 健康检查：
 ```bash
-curl http://localhost:3001/api/health
+curl http://localhost:8010/api/health
 ```
 
 ## RAG 管道流程
@@ -347,14 +383,14 @@ DeepSeek LLM 精排（备选）
 │                       🖥️  用户浏览器                               │
 │                                                                  │
 │   React 18 · TypeScript · Vite · Less（\*.module.less）· SSE 流式接收 │
-│   http://localhost:5173                                          │
+│   http://localhost:5180                                          │
 └──────────────────────────────┬───────────────────────────────────┘
                                │
                                │  HTTP / SSE
                                │
                                ▼
 ╔══════════════════════════════════════════════════════════════════╗
-║                  🧠 Baby AI Server  (:3001)                       ║
+║                  🧠 Baby AI Server  (:8020)                       ║
 ║                  Express.js + TypeScript                          ║
 ╠══════════════════════════════════════════════════════════════════╣
 ║                                                                    ║
@@ -391,7 +427,7 @@ DeepSeek LLM 精排（备选）
                ▼              ▼
 ╔══════════════════╗  ╔══════════════════════╗
 ║  🐍 Reranker     ║  ║  🗄️ ChromaDB         ║
-║  (:8001)         ║  ║  (:8000)             ║
+║  (:8011)         ║  ║  (:8000)             ║
 ║                  ║  ║                      ║
 ║  FastAPI         ║  ║  Docker 容器           ║
 ║  BAAI/bge-       ║  ║                      ║

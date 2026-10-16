@@ -13,8 +13,11 @@ from datasets import Dataset
 from langchain_ollama import OllamaEmbeddings
 
 
-# 指定 .env 的绝对路径
-load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
+# 指定仓库根目录的 .env 的绝对路径。
+# 注意是**三级** dirname:scripts/ → python-server/ → 仓库根。
+# 原来只退两级,读的是 python-server/.env —— 那份已合并进根目录的 .env 并删除。
+# 两份并存时「改了没生效」就是这么来的,所以这里把路径写死。
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env"))
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL")
@@ -34,7 +37,10 @@ def read_test_questions(name: str):
 
     for i, case in enumerate(test_cases, start=1):
         response = requests.post(
-            "http://127.0.0.1:8002/api/chat",
+            # 端口从环境变量读，默认 8010 —— 和 client/vite.config.ts、
+            # scripts/devguard.mjs 顶部的端口表保持一致（原先是硬编码的 8002，
+            # 那正好是 evalflow 后端的位置，撞上了会安静地评测到别人家后端上）。
+            f"{os.getenv('BABY_AI_BASE_URL', 'http://127.0.0.1:8010')}/api/chat",
             json={
                 "message": case["question"],
                 "session_id": "eval_test",

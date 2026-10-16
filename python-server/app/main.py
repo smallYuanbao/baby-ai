@@ -54,10 +54,23 @@ start_time = Datetime.now()
 app.include_router(growth_router)
 app.include_router(play_router)
 
+# 服务身份标识。
+#
+# 为什么值得单独一个常量:多项目并行开发时,端口撞车是必然的,而
+# **只返回 {"status": "ok"} 的健康检查无法回答"对面是谁"** —— 任何一个
+# FastAPI 服务(比如 evalflow)都会这么答。于是前端静默连到别人的后端时,
+# 症状表现为「某些接口 404 / 数据明显不对」,会被误当成业务 bug 查很久。
+#
+# 带上这个名字之后,scripts/devguard.mjs 能在启动前直接告诉你
+# 「8010 上坐的是 evalflow,不是 baby-ai」。改前端端口/代理时**别改这个名字**。
+SERVICE_NAME = "baby-ai"
+
+
 @app.get("/api/health")
 async def health_check():
     utc_now = Datetime.now(timezone.utc)
     return {
+        "service": SERVICE_NAME,
         "status": "ok",
         "uptime": round((Datetime.now() - start_time).total_seconds(), 2),
         "timestamp": utc_now.isoformat(),

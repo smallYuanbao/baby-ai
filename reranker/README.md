@@ -18,7 +18,7 @@ uv pip install -r requirements.txt
 ```bash
 cd reranker
 source venv/bin/activate
-uvicorn server:app --host 0.0.0.0 --port 8001
+uvicorn server:app --host 0.0.0.0 --port 8011
 ```
 
 ## API
@@ -33,7 +33,7 @@ uvicorn server:app --host 0.0.0.0 --port 8001
 首次启动后建议先预热，避免第一个用户踩冷启动：
 
 ```bash
-curl -X POST http://127.0.0.1:8001/rerank \
+curl -X POST http://127.0.0.1:8011/rerank \
   -H "Content-Type: application/json" \
   -d '{"query": "预热", "documents": [{"id":"0","text":"预热"}], "top_k": 1}'
 ```

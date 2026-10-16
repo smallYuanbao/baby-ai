@@ -20,7 +20,7 @@ How to run:
   python server.py
 
   # or via uvicorn (production)
-  uvicorn server:app --host 0.0.0.0 --port 8001 --workers 1
+  uvicorn server:app --host 0.0.0.0 --port 8011 --workers 1
 
   Note: --workers > 1 is NOT recommended because the model is loaded once in
   global memory; multiple workers would each load their own copy.
@@ -323,4 +323,4 @@ async def rerank(req: RerankRequest):
 # gunicorn with uvicorn workers, or systemd).
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=8011)

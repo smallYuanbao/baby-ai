@@ -95,7 +95,7 @@ server.on('close', () => {
 /**
  * Start listening on the configured port.
  *
- * Port is read from `process.env.PORT` (default `3001`) by the config module.
+ * Port is read from `process.env.PORT` (default `8020`) by the config module.
  *
  * @see {@link module:config}
  */

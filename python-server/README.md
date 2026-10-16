@@ -13,7 +13,7 @@ uv pip install -r requirements/base.txt
 ```bash
 cd python-server
 source .venv/bin/activate
-uvicorn app.main:app --reload --port 8002
+uvicorn app.main:app --reload --port 8010
 ```
 
 ## Docker 部署
@@ -29,7 +29,7 @@ docker compose up -d
 docker compose exec backend python scripts/ingest_balanced.py
 
 # 4. 验证
-curl http://127.0.0.1:8002/api/health
+curl http://127.0.0.1:8010/api/health
 
 # 5. 停止
 docker compose down
@@ -39,10 +39,10 @@ docker compose down
 
 | 服务 | 端口 |
 |------|:---:|
-| Backend | 8002 |
+| Backend | 8010 |
 | ChromaDB | 8000 |
 | Ollama | 11434 |
-| Reranker | 8001 |
+| Reranker | 8011 |
 
 **首次启动注意：**
 - Ollama 会自动拉取 `bge-m3` 模型（`ollama-init` 容器）
