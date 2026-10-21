@@ -37,6 +37,40 @@
 }
 
 // ---------------------------------------------------------------------------
+// Upload Error
+// ---------------------------------------------------------------------------
+// 上传失败的提示条。
+//
+// 它存在的唯一理由：以前选了一个后端不支持的格式，界面表现是「缩略图闪一下没了，
+// 什么都不说」—— 用户完全无从判断是网络问题、文件问题还是自己点错了。
+.uploadError {
+  display: flex;
+  align-items: flex-start;
+  gap: @space-2;
+  margin-bottom: @space-2;
+  padding: @space-2 @space-3;
+  // 用红色系提醒"这次没成功"，但和错误气泡（bubble）不同：这里不是对话内容，
+  // 是一条系统提示，所以底色更淡、无边框，不抢对话框的视觉层级。
+  background: @red-50;
+  color: @red-700;              // @red-700 在 @red-50 上过 AA（见 variables.less 的说明）
+  font-size: @text-xs;
+  border-radius: @radius-xl;
+  line-height: 1.5;
+}
+
+.uploadErrorClose {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0 @space-1;
+  color: @red-700;
+  opacity: 0.7;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Input Area (horizontal row: buttons + textarea)
 // ---------------------------------------------------------------------------
 

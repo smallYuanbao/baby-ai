@@ -27,20 +27,31 @@ interface FileUploadButtonProps {
   /** When `true`, the trigger button is disabled and the user cannot open the
    *  file picker. */
   disabled?: boolean;
+
+  /**
+   * `<input accept>` 的值，例如 `".pdf,.txt"`。
+   *
+   * **由调用方从后端 `/api/upload/formats` 拉取后传入**，不要在这里写死 ——
+   * 前后端各维护一份支持列表必然脱节（曾经这里列了 9 种、后端只收 2 种，
+   * 用户选个 Word 必然撞墙，而且撞得毫无提示）。
+   *
+   * 缺省时只列后端目前确实支持的两种，宁可少列也不要列出会被拒的格式。
+   */
+  accept?: string;
 }
 
 /**
  * Renders a file-upload button for the chat input area.
  *
- * The hidden `<input>` accepts common document and image formats
- * (`.txt`, `.pdf`, `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.doc`, `.docx`).
+ * The hidden `<input>` 的 accept 列表由调用方传入（来自后端 `/api/upload/formats`），
+ * 这里不写死 —— 见 `accept` prop 的说明。
  * The visible trigger is an {@link IconButton} with a paperclip SVG icon,
  * rendered in “ghost” variant for a subtle appearance.
  *
  * Accessibility: the IconButton carries a Chinese label (“上传文件” – “upload
  * file”) that serves as its accessible name.
  */
-export function FileUploadButton({ inputRef, onChange, disabled }: FileUploadButtonProps) {
+export function FileUploadButton({ inputRef, onChange, disabled, accept = '.pdf,.txt' }: FileUploadButtonProps) {
   return (
     <>
       {/* Hidden native file input – styled off-screen via CSS module */}
@@ -49,7 +60,7 @@ export function FileUploadButton({ inputRef, onChange, disabled }: FileUploadBut
         type="file"
         onChange={onChange}
         className={styles.input}
-        accept=".txt,.pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx"
+        accept={accept}
       />
       {/* Visible trigger: clicking programmatically opens the hidden input */}
       <IconButton

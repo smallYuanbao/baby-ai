@@ -54,4 +54,15 @@ export interface UploadResponse {
   mimeType: string;
   size: number;
   extractedText?: string;
+  /**
+   * 上传时后端对文件做的一句话归类（如「一份宝宝体检报告」）。
+   * 判不出来时为 `null`/缺省 —— 当作"不知道"，不要当成"与育儿无关"。
+   */
+  summary?: string | null;
+  /**
+   * 这份文件是否与育儿相关。**三态**：
+   * `true` 相关 / `false` 无关 / `null` 或 `undefined` 没判出来。
+   * 只有明确的 `false` 才提示用户 —— 把未知当否定会误伤正常的育儿资料。
+   */
+  parentingRelated?: boolean | null;
 }
