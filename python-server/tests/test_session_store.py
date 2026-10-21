@@ -49,24 +49,37 @@ def test_history_is_persistent_across_connections(db):
 
 
 def test_trim_old_messages(db):
-    """超过 MAX_ROUNDS*2 条时，只保留最新消息，最早的被删掉"""
-    for i in range(session.MAX_ROUNDS * 2 + 3):  # 写入 23 条
+    """超过存储上限时只保留最新消息，最早的被删掉"""
+    total = session.MAX_STORED_MESSAGES + 5
+    for i in range(total):
+        session.add_user_message(USER, "s1", f"消息{i}")
+
+    stored = session.get_session_messages(USER, "s1")
+    assert len(stored) == session.MAX_STORED_MESSAGES
+    # 最早的消息被删，最新的保留
+    assert stored[0]["content"] == "消息5"
+    assert stored[-1]["content"] == f"消息{total - 1}"
+
+
+def test_llm_history_is_windowed_separately_from_storage(db):
+    """存储保留 100 条，但喂给 LLM 的只有最近 16 条 —— 两个上限是独立的。"""
+    for i in range(session.MAX_STORED_MESSAGES):
         session.add_user_message(USER, "s1", f"消息{i}")
 
     history = session.get_history(USER, "s1")
-    assert len(history) == session.MAX_ROUNDS * 2  # 裁剪到 20 条
-    # 最早的消息被删，最新的保留
-    assert history[0].content == "消息3"
-    assert history[-1].content == f"消息{session.MAX_ROUNDS * 2 + 2}"
 
-    # 落库也只有 20 条
+    assert len(history) == session.MAX_CONTEXT_MESSAGES
+    assert history[0].content == f"消息{session.MAX_STORED_MESSAGES - session.MAX_CONTEXT_MESSAGES}"
+    assert history[-1].content == f"消息{session.MAX_STORED_MESSAGES - 1}"
+
+    # 落库仍是完整的 MAX_STORED_MESSAGES 条（上下文窗口不影响存储）
     conn = sqlite3.connect(db)
     cnt = conn.execute(
         "SELECT COUNT(*) FROM messages WHERE user_id = ? AND session_id = ?",
         (USER, "s1"),
     ).fetchone()[0]
     conn.close()
-    assert cnt == session.MAX_ROUNDS * 2
+    assert cnt == session.MAX_STORED_MESSAGES
 
 
 def test_multi_tenant_isolation(db):
@@ -101,3 +114,44 @@ def test_get_history_tolerates_already_poisoned_rows(db):
     session.add_message("u_poison", "s_poison", "user", "你好")
     hist = session.get_history("u_poison", "s_poison")             # 不抛 ValidationError
     assert [h.content for h in hist] == ["你好"]
+
+
+# ===============================================================
+# 会话列表 / 会话恢复（refresh 后恢复对话）
+# ===============================================================
+
+def test_list_sessions_ordered_by_recent_activity(db):
+    session.add_user_message(USER, "s_old", "先问的")
+    session.add_assitant_message(USER, "s_old", "先答的")
+    session.add_user_message(USER, "s_new", "后问的")
+
+    sessions = session.list_sessions(USER)
+    assert [s["sessionId"] for s in sessions] == ["s_new", "s_old"]
+
+    old = next(s for s in sessions if s["sessionId"] == "s_old")
+    assert old["messageCount"] == 2
+    assert old["title"] == "先问的"
+
+
+def test_list_sessions_is_user_scoped(db):
+    session.add_user_message("user_bob", "s_bob", "bob 的问题")
+    assert session.list_sessions(USER) == []
+
+
+def test_get_session_messages_restores_answers_and_references(db):
+    refs = [{"id": "med_1", "text": "宝宝发烧护理指南", "score": 0.94}]
+    session.add_user_message(USER, "s1", "宝宝发烧怎么处理？")
+    session.add_assitant_message(USER, "s1", "先物理降温", refs)
+
+    messages = session.get_session_messages(USER, "s1")
+
+    assert [m["role"] for m in messages] == ["user", "assistant"]
+    assert messages[1]["content"] == "先物理降温"
+    # 引用以原始结构返回，交给前端 normalizeReferences 归一化
+    assert messages[1]["references"] == refs
+    # 用户消息没有引用
+    assert messages[0]["references"] is None
+
+
+def test_get_session_messages_unknown_session_is_empty(db):
+    assert session.get_session_messages(USER, "s_unknown") == []

@@ -113,7 +113,7 @@ def get_rag_context(
         messages:        拼好的完整 messages 数组（可直接传给 LLM）
         references:      带 id + text 的结构化引用列表（返回给前端展示）
         cache_key:       缓存 key（改写后的 query 规范化结果）
-        can_cache_answer: 能否缓存答案（仅无历史上下文的 FAQ 场景为 True）
+        can_cache_answer: 能否缓存答案（无历史上下文、且没带附件的 FAQ 场景才为 True）
     """
 
     def checkpoint(stage: str) -> None:
@@ -137,14 +137,40 @@ def get_rag_context(
     checkpoint("查询改写")
 
     # 3. 意图路由（低置信时内部会调 LLM 复核）
-    intent_result = route_intent(message)
+    #
+    # 带附件时先把**上传时做好的文件归类**取出来，一起交给门控。
+    # 用户的真实意图可能全在那份文件里 —— 上传完文件后打的字往往就是「帮我看看」
+    # 这种没有信息量的话，只拿它去分类，只能得到一个错误的结论。
+    #
+    # 按 file_id 在服务端查，而不是让前端把归类结果带回来：那份判断会直接决定
+    # 走哪个 prompt，属于不该信任客户端输入的环节。
+    file_context = None
+    if file_id:
+        from app.services import upload_store
+        from app.services.upload_classify import format_file_context
+
+        try:
+            file_context = format_file_context(upload_store.get_file_meta(file_id))
+        except Exception as e:
+            # 读不到就当没有摘要 —— 门控退回只看问题文本，也就是改动前的行为。
+            logger.warning("[文件归类] 读取失败，按无摘要处理：%s: %s", type(e).__name__, e)
+        if file_context:
+            logger.info("[文件归类] 参与意图判定：%s", file_context)
+
+    intent_result = route_intent(message, file_context)
     logger.info("[意图路由] 类别: %s", intent_result.intent)
     checkpoint("意图路由")
 
     # 缓存 key：改写后的 query 规范化（改写已把代词还原成完整问法）
     cache_key = _cache_key(message)
     # 答案缓存只在无历史时启用 —— 多轮追问「那怎么办」答案依赖上下文，不能缓存
-    can_cache_answer = not history
+    #
+    # 带附件时同样不能启用：cache_key 只有查询文本，**不含 file_id**。于是
+    #     先不带附件问「帮我看看这份文件」→ 答案进缓存
+    #     再带上附件问同一句话         → 命中那条缓存，返回一个没看过文件的答案
+    # 而且它连"降级"都不算 —— 用户完全看不出自己的文件被忽略了。
+    # 上面几行的检索缓存已经按同样的理由做了 `if not file_id`，这里补齐。
+    can_cache_answer = not history and not file_id
 
     # 4. RAG 检索（后）— emergency 和 off_topic 都跳过
     #
@@ -152,7 +178,9 @@ def get_rag_context(
     # 跑完 BM25 + BGE 精排（单次精排 24 秒），拿回 5 篇分数清一色 0.0 的文档，
     # 再被相关性门控丢掉 —— 整条最贵的链路白跑一遍。既然意图已经判定与育儿无关，
     # 直接不进这条路。
-    if intent_result.intent in ("emergency", "off_topic"):
+    # file_qa 也跳过知识库检索:这一档的答案来源是**用户那份文件**,不是通用知识库。
+    # 去检索通用育儿知识只会往 prompt 里塞无关内容,还白跑一遍最贵的链路。
+    if intent_result.intent in ("emergency", "off_topic", "file_qa"):
         context_docs = []
         references = []
     else:
@@ -224,14 +252,27 @@ def get_rag_context(
             if not file_id:
                 rag_cache.set(cache_key, references)
 
-        # 文件上下文：用户上传了文件，额外检索该文件内容，排在最前（优先展示 + 优先喂给 LLM）
-        if file_id:
-            file_docs = search_by_file(message, file_id, top_k=5, user_id=user_id)
-            if file_docs:
-                file_refs = [Reference(id=d.id or "", text=d.text) for d in file_docs]
-                references = file_refs + references
-                context_docs = [d.text for d in file_docs] + context_docs
-                logger.info("[文件上下文] 命中 %s 的 %d 个 chunks", file_id, len(file_docs))
+    # 4b. 文件上下文 —— **独立于意图判定**
+    #
+    # 用户上传了文件，就该读它。这是整个产品里最明确的一次意图表达，比任何一句问题
+    # 文本都强，不该被「分类器认为这句话跟育儿无关」给否掉。
+    #
+    # 原来这段在 intent 的 else 分支里面，于是判成 off_topic 时**连文件都不读**。
+    # 实测差别（同一件事，只是措辞不同）：
+    #     「帮我看看这份文件」            -> off_topic -> 附件**根本没被读**
+    #     「帮我看看里面的内容，我家宝宝发烧了」 -> illness    -> 附件正常进上下文
+    # 前者才是常态 —— 用户上传完文件后打的字往往就是「帮我看看」这种没有信息量的话，
+    # 脱离附件看它确实「与育儿无关」。而正因为没有信息量，才更需要附件来提供所指。
+    #
+    # emergency 仍然跳过：急救以标准响应为准，不让上传内容改变处置优先级。
+    # 这一条是**有意保留**的，不是漏改。
+    if file_id and intent_result.intent != "emergency":
+        file_docs = search_by_file(message, file_id, top_k=5, user_id=user_id)
+        if file_docs:
+            file_refs = [Reference(id=d.id or "", text=d.text) for d in file_docs]
+            references = file_refs + references
+            context_docs = [d.text for d in file_docs] + context_docs
+            logger.info("[文件上下文] 命中 %s 的 %d 个 chunks", file_id, len(file_docs))
 
     # 5. 拼 messages（纯字符串拼接，很快，但仍放在最后的取消点之后）
     messages = _build_messages(message, context_docs, history, intent_result)
@@ -275,9 +316,15 @@ def execute_rag_pipeline(
     else:
         logger.info("[缓存] 答案命中: %s", cache_key)
 
-    # 更新服务端历史（按 user_id 隔离）
+    # 更新服务端历史（按 user_id 隔离）。
+    # 引用一起存：刷新后恢复对话时，这些来源还要在右侧面板里展示。
     add_user_message(user_id, session_id, user_message)
-    add_assitant_message(user_id, session_id, answer)
+    add_assitant_message(
+        user_id,
+        session_id,
+        answer,
+        [r.model_dump() for r in references],
+    )
 
     return {"answer": answer, "references": references}
 
@@ -323,6 +370,32 @@ async def execute_rag_stream(
     abort = threading.Event()
     watcher = asyncio.create_task(_watch_disconnect(request, abort))
 
+    # 已生成的回答片段。流式路径以前**只存用户消息、不存回答**，
+    # 于是网页产生的会话在库里全是"只有提问"的半截记录，刷新后也无从恢复。
+    answer_parts: list[str] = []
+    references: list[Reference] = []
+    persisted = False
+
+    def persist_history() -> None:
+        """把这一轮写入会话库（幂等，最多执行一次）。
+
+        **同步写**而不是 `run_in_threadpool`：这个函数在 `finally` 里执行，
+        而客户端断开时协程已经被取消 —— 那一刻 `await` 会立刻抛
+        CancelledError，等于什么都没存。SQLite 单条插入是毫秒级的，
+        在收尾阶段阻塞一下可以接受。
+        """
+        nonlocal persisted
+        if persisted:
+            return
+        persisted = True
+        add_user_message(user_id, session_id, user_message)
+        add_assitant_message(
+            user_id,
+            session_id,
+            "".join(answer_parts),
+            [r.model_dump() for r in references],
+        )
+
     try:
         # 检索整条链是同步的：BM25、ChromaDB、BGE 精排，而且查询改写 / 意图复核 /
         # 精排兜底各自还会同步调一次 LLM。**必须丢线程池**——直接在事件循环上跑
@@ -350,14 +423,19 @@ async def execute_rag_stream(
         yield f"event: references\ndata: {refs_json}\n\n"
 
         async for chunk in generate_stream_with_interrupt_and_fallback(messages, request):
+            answer_parts.append(chunk)
             # token 包装成 SSE 事件：generate_stream 内部 yield 的是裸文本，
             # 前端 useSSE 期望 `event: token`，data 为 {text} 对象（兼容纯字符串）
             yield f"event: token\ndata: {json.dumps({'text': chunk}, ensure_ascii=False)}\n\n"
 
         yield f"event: done\ndata: {{}}\n\n"
-
-        # 会话存储是同步 IO，同样丢线程池，别在最后一下又把循环按一下
-        await run_in_threadpool(add_user_message, user_id, session_id, user_message)
     finally:
         # 无论正常结束、异常还是被提前关闭，探测器都要收掉
         watcher.cancel()
+        # 正常答完、用户中途「停止生成」、连接断开 —— 三种情况都走到这里。
+        # 中途停止时存下已经生成的部分：那是用户实际看到的内容，
+        # 下一轮对话和刷新恢复都应该以它为准。
+        try:
+            persist_history()
+        except Exception as e:
+            logger.warning("[会话] 落库失败 session=%s: %s", session_id, e)

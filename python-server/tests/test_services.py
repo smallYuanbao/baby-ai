@@ -256,7 +256,7 @@ def _stub_rag(monkeypatch, ranked_docs, tier="bge"):
     )
     monkeypatch.setattr(
         chat_service, "route_intent",
-        lambda m: SimpleNamespace(intent="general", prompt=""),
+        lambda m, file_context=None: SimpleNamespace(intent="general", prompt=""),
     )
     # 检索已从 hybrid_search（线性加权）切到 hybrid_search_rrf，stub 跟着改名
     monkeypatch.setattr(chat_service, "hybrid_search_rrf", lambda *a, **k: [])
@@ -380,7 +380,7 @@ def test_off_topic_skips_retrieval(monkeypatch):
     )
     monkeypatch.setattr(
         chat_service, "route_intent",
-        lambda m: SimpleNamespace(intent="off_topic", prompt=""),
+        lambda m, file_context=None: SimpleNamespace(intent="off_topic", prompt=""),
     )
     monkeypatch.setattr(chat_service, "hybrid_search_rrf", boom)
     monkeypatch.setattr(chat_service, "rerank", boom)
@@ -474,3 +474,144 @@ def test_rag_gate_skipped_when_rerank_degraded(monkeypatch):
 
     assert len(refs) == 1     # 没有被门控拦掉
     assert "降级路径返回的文档" in " ".join(m.content for m in messages)
+
+
+# —— 附件检索不能被意图门控否掉 ——
+
+def _stub_rag_context(monkeypatch, intent: str, file_docs, file_meta=None):
+    """把 get_rag_context 前面的 LLM 环节全部短路,只留下要验的检索分支。
+
+    返回一个 dict,用来观察"文件检索有没有被调用 / 知识库检索有没有被调用 /
+    门控收到了什么文件摘要"。
+    """
+    from app.models.chat import RAGDocument
+    from app.services import chat_service, upload_store
+    from app.services.pipeline.intent import IntentResult
+    from app.services.pipeline.rewrite import RewriteResult
+
+    monkeypatch.setattr(chat_service, "get_history", lambda *a, **k: [])
+    monkeypatch.setattr(
+        chat_service, "rewrite_query",
+        lambda q, h: RewriteResult(originalQuery=q, rewrittenQuery=q, wasRewritten=False),
+    )
+
+    seen = {"kb": 0, "file": None, "file_context": "__never_called__"}
+
+    def fake_route_intent(question, file_context=None):
+        seen["file_context"] = file_context
+        return IntentResult(intent=intent, confidence=1.0, source="llm", prompt="<prompt>")
+
+    monkeypatch.setattr(chat_service, "route_intent", fake_route_intent)
+    # 归类数据是外部状态:测试里完全掌控,避免读到真实的 data/uploads.db
+    monkeypatch.setattr(upload_store, "get_file_meta", lambda fid: file_meta)
+
+    def fake_kb(*a, **k):
+        seen["kb"] += 1
+        raise AssertionError("这一档不该走知识库检索")
+
+    def fake_search_by_file(query, file_id, top_k=5, user_id=None):
+        seen["file"] = {"file_id": file_id, "user_id": user_id}
+        return [RAGDocument(id="c1", text=file_docs, score=0.9)]
+
+    monkeypatch.setattr(chat_service, "hybrid_search_rrf", fake_kb)
+    monkeypatch.setattr(chat_service, "search_by_file", fake_search_by_file)
+    return chat_service, seen
+
+
+def test_off_topic_still_reads_attached_file(monkeypatch):
+    """判成 off_topic 时,附件仍然要被检索。
+
+    回归点:文件检索原先写在意图门控的 else 分支里,于是
+        「帮我看看这份文件」              -> off_topic -> 附件**根本没被读**
+        「帮我看看里面的内容,我家宝宝发烧了」 -> illness    -> 附件正常进上下文
+    同一件事、只是措辞不同,附件一个被读一个被丢。而前者才是常态 ——
+    用户上传完文件打的字往往就是「帮我看看」这种没有信息量的话,
+    脱离附件看它确实"与育儿无关";正因为没信息量,才更需要附件提供所指。
+    """
+    chat_service, seen = _stub_rag_context(monkeypatch, "off_topic", "体检报告:身高 70cm,体重 8.5kg")
+
+    messages, references, _key, _cache = chat_service.get_rag_context(
+        "帮我看看这份文件", "sess-file-attach", [], "alice", "ca83ea3f",
+    )
+
+    assert seen["kb"] == 0, "off_topic 仍然应该跳过知识库检索(那部分原样保留)"
+    assert seen["file"] is not None, "附件没有被检索 —— 用户传了文件等于没传"
+    assert seen["file"]["file_id"] == "ca83ea3f"
+    assert seen["file"]["user_id"] == "alice", "必须带 user_id,否则能凭 file_id 越权读他人文件"
+    assert any("体检报告" in r.text for r in references), "文件内容没进引用列表"
+    assert "体检报告" in messages[-1].content, "文件内容没进喂给模型的 prompt"
+
+
+def test_emergency_still_skips_attached_file(monkeypatch):
+    """急救档仍然不读附件 —— 这是**有意保留**的,不是漏改。
+
+    急救以标准响应为准:不让用户上传的内容改变处置优先级,也不给这条最该快
+    的链路增加一次检索。哪天想改这里,请连同这条测试一起改,别当它不存在。
+    """
+    chat_service, seen = _stub_rag_context(monkeypatch, "emergency", "体检报告:身高 70cm")
+
+    chat_service.get_rag_context(
+        "宝宝误吞了纽扣电池", "sess-emergency", [], "alice", "ca83ea3f",
+    )
+
+    assert seen["file"] is None, "急救档不应该读附件(见 docstring)"
+
+
+def test_answer_cache_disabled_when_file_attached(monkeypatch):
+    """带附件时不能走答案缓存 —— 它的 key 只有查询文本,不含 file_id。
+
+    否则「先不带附件问一次,再带上附件问同一句话」会命中前一条缓存,返回一个
+    没看过文件的答案,而且用户完全看不出自己的文件被忽略了。
+
+    注意用 off_topic 档来验:这一档会跳过知识库检索,于是这条测试只依赖
+    can_cache_answer 这一个开关,不受检索链路影响。
+    """
+    chat_service, _ = _stub_rag_context(monkeypatch, "off_topic", "体检报告:身高 70cm")
+
+    *_, can_cache_with_file = chat_service.get_rag_context(
+        "帮我看看这份文件", "sess-cache-with-file", [], "alice", "ca83ea3f",
+    )
+    *_, can_cache_without_file = chat_service.get_rag_context(
+        "帮我看看这份文件", "sess-cache-no-file", [], "alice", None,
+    )
+
+    assert can_cache_with_file is False, "带附件时不该读写答案缓存"
+    assert can_cache_without_file is True, "不带附件时应保持原来的可缓存行为(别改坏)"
+
+
+def test_file_summary_reaches_the_intent_gate(monkeypatch):
+    """上传时做的归类必须传达到门控 —— 否则「帮我看看」仍然会被判成非育儿。"""
+    meta = {
+        "file_id": "ca83ea3f", "user_id": "alice", "filename": "体检.pdf",
+        "summary": "宝宝体检报告", "parenting_related": True,
+    }
+    chat_service, seen = _stub_rag_context(monkeypatch, "file_qa", "身高 70cm", file_meta=meta)
+
+    chat_service.get_rag_context("帮我看看", "sess-meta", [], "alice", "ca83ea3f")
+
+    assert seen["file_context"], "门控没收到文件摘要"
+    assert "宝宝体检报告" in seen["file_context"]
+    assert "与育儿相关" in seen["file_context"]
+
+
+def test_no_file_summary_keeps_gate_unchanged(monkeypatch):
+    """归类没做出来（或没这条记录）时，门控拿到的必须是 None —— 退回只看问题文本。"""
+    chat_service, seen = _stub_rag_context(monkeypatch, "off_topic", "正文", file_meta=None)
+
+    chat_service.get_rag_context("帮我看看", "sess-nometa", [], "alice", "no-such-file")
+
+    assert seen["file_context"] is None
+
+
+def test_readding_file_meta_failure_does_not_break_chat(monkeypatch):
+    """归类数据读不出来（库损坏 / 路径不对）时，聊天不能跟着挂。"""
+    from app.services import upload_store
+    from app.models.chat import RAGDocument
+
+    chat_service, seen = _stub_rag_context(monkeypatch, "general", "正文")
+    monkeypatch.setattr(upload_store, "get_file_meta", lambda fid: (_ for _ in ()).throw(RuntimeError("db locked")))
+    monkeypatch.setattr(chat_service, "hybrid_search_rrf", lambda *a, **k: [])
+
+    # 不抛异常即通过；门控拿到 None，退回原行为
+    chat_service.get_rag_context("宝宝发烧", "sess-dberr", [], "alice", "x")
+    assert seen["file_context"] is None
