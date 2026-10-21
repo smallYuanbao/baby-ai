@@ -173,14 +173,79 @@ async function uploadFile<T>(file: File): Promise<T> {
     // body isn't valid JSON, so the ApiError constructor still receives
     // sane defaults for `code` and `error`.
     const body = await response.json().catch(() => ({}));
+    // FastAPI 的错误体是 `{"detail": "..."}`，不是 `{"error": "..."}`。
+    // 只读 body.error 的话，真实原因（「不支持 .docx 格式」）会被丢掉，
+    // 用户只能看到笼统的"文件上传失败" —— 等于白拒了一次。
     throw new ApiError(
       response.status,
       body.code || 'UPLOAD_ERROR',
-      body.error || '文件上传失败',
+      body.detail || body.error || '文件上传失败',
     );
   }
 
   return response.json();
+}
+
+/**
+ * 拉取后端支持的上传能力（扩展名 + 大小上限）。
+ *
+ * 前端**不再自己写死 `accept` 列表** —— 两边各写一份必然会脱节（曾经前端列了
+ * 9 种、后端只收 2 种，用户选个 Word 必然撞墙且毫无提示）。以后端返回为准。
+ *
+ * @returns `{ extensions: string[]; maxFileSizeMB: number }`
+ * @throws {ApiError} 接口不可用时抛出；调用方应退回保守默认值
+ */
+export interface UploadFormats {
+  /** 后端能解析的扩展名（小写、不带点），如 `["pdf", "txt"]` */
+  extensions: string[];
+  /** 单文件大小上限（MB） */
+  maxFileSizeMB: number;
+}
+
+async function uploadFormats(): Promise<UploadFormats> {
+  // ⚠️ 传**裸路径**：request() 内部会自己拼 config.apiBaseUrl。
+  // 这里曾写成 `${config.apiBaseUrl}/upload/formats`，拼出来是 /api/api/... → 404，
+  // 而调用方又把失败静默吞了，表现为「accept 一直是默认的 .pdf,.txt」。
+  return request<UploadFormats>('/upload/formats');
+}
+
+// ===========================================================================
+// 会话历史 —— 刷新页面后恢复对话
+// ===========================================================================
+
+/** 会话列表项（不带消息正文）。 */
+export interface SessionSummary {
+  sessionId: string;
+  /** 首条用户消息的前 30 字，用于列表标题。 */
+  title: string;
+  messageCount: number;
+  /** ISO 时间戳（最近一次活动）。 */
+  updatedAt: string;
+}
+
+/** 服务端存储的一条消息。`references` 是 SSE 里原样的 `{id,text,score}` 数组。 */
+export interface StoredSessionMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+  references?: unknown;
+}
+
+/** 当前用户的历史会话（按最近活动倒序）。 */
+async function listSessions(): Promise<SessionSummary[]> {
+  return request<SessionSummary[]>('/sessions');
+}
+
+/** 某个会话的完整消息。未知 sessionId 返回空数组。 */
+async function getSessionMessages(
+  sessionId: string,
+): Promise<{ sessionId: string; messages: StoredSessionMessage[] }> {
+  return request(`/sessions/${encodeURIComponent(sessionId)}`);
+}
+
+/** 删除一个会话（服务端幂等：不存在也返回成功）。 */
+async function deleteSession(sessionId: string): Promise<{ success: boolean }> {
+  return del(`/sessions/${encodeURIComponent(sessionId)}`);
 }
 
 /**
@@ -271,7 +336,11 @@ export const api = {
   put,
   del,
   uploadFile,
+  uploadFormats,
   chatSSE,
+  listSessions,
+  getSessionMessages,
+  deleteSession,
 
   // =========================================================================
   // Growth API — manage child profiles, growth records, and AI-powered analysis
