@@ -15,9 +15,10 @@ from app.core.config import CHAT_RATE_LIMIT
 from app.models.chat import ChatRequest, ChatResponse
 from app.services.chat_service import execute_rag_pipeline, execute_rag_stream
 from app.services.agent import MCPClient, agent_chat, agent_chat_mcp, mutil_agent_pipeline, react_agent_chat, react_agent_with_reflection, unified_agent
-from app.services.upload_service import process_upload
+from app.services.upload_service import ALLOWED_EXTENSIONS, process_upload
 from app.api.growth import router as growth_router
 from app.api.play import router as play_router
+from app.api.sessions import router as sessions_router
 from app.core.cost_tracker import cost_tracker
 
 
@@ -53,6 +54,7 @@ start_time = Datetime.now()
 # 业务子路由（growth / play 模块化路由）
 app.include_router(growth_router)
 app.include_router(play_router)
+app.include_router(sessions_router)
 
 # 服务身份标识。
 #
@@ -138,6 +140,22 @@ def meta():
     }
 
 
+@app.get("/api/upload/formats")
+def upload_formats():
+    """上传能力自述：前端据此生成 `<input accept>`，不再自己写死一份。
+
+    为什么需要这个接口：前后端各写一份支持列表**必然**会脱节。实际情况就是
+    前端列了 9 种（含 .docx / .png），后端只收 2 种 —— 用户选个 Word 必然撞墙，
+    而且撞得毫无提示。让后端说出它到底收什么，前端照着渲染，只留一个真相来源。
+    """
+    from app.core.config import MAX_FILE_SIZE_MB
+
+    return {
+        "extensions": sorted(ALLOWED_EXTENSIONS),
+        "maxFileSizeMB": MAX_FILE_SIZE_MB,
+    }
+
+
 # 文件上传：解析 → 清洗 → 分块 → 向量化 → 入库 ChromaDB（供 RAG 检索）
 # 返回前端契约（驼峰字段），对齐 client 的 UploadResponse 类型
 @app.post("/api/upload")
@@ -149,6 +167,10 @@ async def upload_file(file: UploadFile = File(...), user_id: str = Depends(get_c
         "mimeType": file.content_type,
         "size": result["size"],
         "chunksCount": result["chunks_count"],
+        # 上传时做的归类，用来在用户提问前就给出"这份文件帮不帮得上忙"的提示。
+        # 两者都可能为 None（= 没判出来），前端按"不提示"处理，**不能当成"与育儿无关"**。
+        "summary": result.get("summary"),
+        "parentingRelated": result.get("parenting_related"),
     }
 
 
