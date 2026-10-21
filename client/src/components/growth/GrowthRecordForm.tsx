@@ -29,6 +29,7 @@ import { Button, Col, DatePicker, Form, Input, InputNumber, Modal, Row, Select }
 import dayjs, { type Dayjs } from 'dayjs';
 import { useGrowth } from '../../contexts/GrowthContext';
 import type { GrowthRecord } from '../../types/growth';
+import styles from './GrowthRecordForm.module.less';
 
 /** 表单字段值。`InputNumber` 直接产出 number，不再需要手工 `parseFloat`。 */
 interface FormValues {
@@ -108,6 +109,27 @@ function toInitialValues(record: GrowthRecord | null): FormValues {
 export function GrowthRecordForm({ childId, record, onClose, onSaved }: GrowthRecordFormProps) {
   const { addRecord, updateRecord } = useGrowth();
   const [form] = Form.useForm<FormValues>();
+
+  /**
+   * 表单当前值（只用于判断"有没有填内容"）。
+   *
+   * 除了日期之外，其它字段全是可选的 —— 也就是说用户什么都不写也能保存，
+   * 结果是一条只有日期的空记录：列表里占一行、图表里没有数据点、
+   * 「共 N 条记录」还会把它算进去。这种记录没有任何信息量，只会污染统计。
+   */
+  const watchedValues = Form.useWatch([], form) as Partial<FormValues> | undefined;
+
+  /** 是否至少填了一项有信息量的内容（备注也算 —— "今天会翻身了"是有价值的记录）。 */
+  const hasContent = Boolean(
+    watchedValues &&
+      (watchedValues.height != null ||
+        watchedValues.weight != null ||
+        watchedValues.headCircumference != null ||
+        watchedValues.sleepDuration != null ||
+        watchedValues.diapers != null ||
+        watchedValues.feedingAmount != null ||
+        (watchedValues.notes ?? '').trim() !== ''),
+  );
 
   /** 保存中：禁用按钮防重复提交。 */
   const [saving, setSaving] = useState(false);
@@ -246,11 +268,19 @@ export function GrowthRecordForm({ childId, record, onClose, onSaved }: GrowthRe
           <Input.TextArea rows={2} placeholder="今天宝宝的特别表现..." />
         </Form.Item>
 
+        {/* 空记录不让提交。禁用按钮的同时必须说明原因 —— 否则用户点了没反应，
+            只会怀疑是 bug。 */}
+        {!hasContent && (
+          <p className={styles.emptyHint}>
+            至少填写一项：身高、体重、头围、睡眠、尿布、喂养量或备注
+          </p>
+        )}
+
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <Button onClick={onClose} disabled={saving}>
             取消
           </Button>
-          <Button type="primary" htmlType="submit" loading={saving}>
+          <Button type="primary" htmlType="submit" loading={saving} disabled={!hasContent}>
             保存记录
           </Button>
         </div>

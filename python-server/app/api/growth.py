@@ -78,8 +78,44 @@ def delete_child(child_id: str, user_id: str = Depends(get_current_user_id)):
 # 成长记录 CRUD
 # ===============================================================
 
+def _has_content(data: CreateGrowthRecord) -> bool:
+    """这条记录是否至少有一项有信息量的内容。
+
+    除 `date` 外所有字段都是可选的，于是"什么都不填"也能通过 Pydantic 校验，
+    存下一条只有日期的空记录。它会占列表一行、让「共 N 条记录」虚高，
+    却不会产生任何图表数据点 —— 对用户没有任何价值。
+
+    备注单独算一项： "今天会翻身了" 本身就是一个有效的成长里程碑。
+    喂养只算"填了量"的情况：表单默认会带上 type/unit，光有类型不算内容。
+    """
+    return (
+        any(
+            v is not None
+            for v in (
+                data.height,
+                data.weight,
+                data.headCircumference,
+                data.sleepDuration,
+                data.diapers,
+            )
+        )
+        or (data.feeding is not None and data.feeding.amount is not None)
+        or bool(data.notes and data.notes.strip())
+    )
+
+
 @router.post("/children/{child_id}/records", status_code=201)
 def add_record(child_id: str, data: CreateGrowthRecord, user_id: str = Depends(get_current_user_id)):
+    # 前端已经禁用了空表单的保存按钮，这里再挡一次：接口是公开的，
+    # 别的客户端（脚本、旧版本前端）不该能把空记录写进来。
+    if not _has_content(data):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "至少填写一项：身高、体重、头围、睡眠、尿布、喂养量或备注",
+                "code": "EMPTY_RECORD",
+            },
+        )
     record = growth_store.add_record(user_id, child_id, data)
     if record is None:
         return _not_found("宝宝档案不存在")
