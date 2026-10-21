@@ -102,6 +102,35 @@
   word-break: break-word;
 }
 
+// ---------------------------------------------------------------------------
+//  附件标签（用户气泡内）
+// ---------------------------------------------------------------------------
+// 气泡本身是「实心橙 + 白字」，所以标签用半透明白底：
+// 既能和正文拉开层次，又不会在橙色上糊成一块看不出边界的色块。
+.fileChip {
+  display: inline-flex;
+  align-items: center;
+  gap: @space-1;
+  // 给绝对上限，**不能写 `max-width: 100%`** —— 气泡是收缩包裹的，那个 100%
+  // 指的是会跟着一起变宽的容器，起不到任何限制作用（实测：一个长文件名把标签
+  // 撑到 508px，气泡跟着变宽成一条）。
+  max-width: 16rem;
+  margin-bottom: @space-1;      // 和下面的正文拉开一点
+  padding: 0.125rem @space-2;
+  font-size: @text-xs;
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: @radius-full;
+}
+
+// 文件名截断成省略号。
+// 它只是「这条消息带了什么」的提示，不该抢正文的注意力；完整名字挂在上层
+// 的 title 上，悬停可见。
+.fileName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 // Rendered markdown body: only need word-break here because the markdown
 // renderer already outputs block/inline structure.
 .markdownBody {
@@ -150,12 +179,53 @@
 //  ReferenceList 组件一起删掉了，否则同一批证据会在两处出现两次。）
 
 // ---------------------------------------------------------------------------
+// Message actions (reference chip + read-aloud)
+// ---------------------------------------------------------------------------
+
+// 气泡下方的一行操作按钮。margin 放行上、不放按钮上，
+// 这样两个按钮谁在谁不在，垂直位置都不会跳。
+.messageActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+// 「📚 引用 N 条」—— 右侧面板的入口。
+// 常态是低对比的描边胶囊：它是辅助操作的入口，不该和正文抢注意力；
+// 选中态（右侧正在显示这一轮）才用主色填充，明确"面板里就是这条"。
+.referenceChip {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  color: @gray-500;
+  background: transparent;
+  border: 1px solid @primary-100;
+  border-radius: @radius-full;
+  transition: color, background-color, border-color 200ms;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    color: @primary-600;
+    background: @primary-50;
+    border-color: @primary-200;
+  }
+}
+
+.referenceChipActive {
+  color: @primary-700;
+  background: @primary-100;   // 比 hover 再深一档，确凿地"这条正在右侧展示"
+  border-color: @primary-200;
+  font-weight: 600;
+}
+
+// ---------------------------------------------------------------------------
 // Read-aloud button
 // ---------------------------------------------------------------------------
 
-// Small icon-button for TTS playback, sitting below the message bubble.
+// Small icon-button for TTS playback, sitting in the actions row below the bubble.
 .readAloudButton {
-  margin-top: 0.5rem;
   padding-left: 0.5rem;
   padding-right: 0.5rem;
   padding-top: 0.25rem;     // compact hit-target — the icon provides the affordance
@@ -173,6 +243,18 @@
   &:hover {
     color: @primary-500;
     background: @primary-50;
+  }
+}
+
+// 正在朗读：按钮变成「停止」。用红色系和红色的"停止生成"按钮保持一致 ——
+// 这两个动作在语义上都是"立刻打断正在进行的输出"。
+.readAloudButtonActive {
+  color: @red-700;
+  background: @red-50;
+
+  &:hover {
+    color: @red-700;
+    background: @red-50;
   }
 }
 

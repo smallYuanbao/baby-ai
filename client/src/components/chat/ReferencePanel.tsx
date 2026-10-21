@@ -9,6 +9,7 @@
  * 常驻右侧第三栏（见 AppShell / ChatContainer）。
  */
 
+import { useEffect, useRef } from 'react';
 import type { Reference } from '../../types/chat';
 import { ReferenceCard } from './ReferenceCard';
 import styles from './ReferencePanel.module.less';
@@ -32,18 +33,34 @@ interface ReferencePanelProps {
    *     没用到知识库，否则会显示"提问后,这里会显示…"，可明明已经问过了。
    */
   hasAnswer: boolean;
+  /**
+   * 这一栏当前对应的是哪一轮回答（如 `"11:15"`）。
+   *
+   * 面板常驻在右侧，和聊天区在视觉上是分离的 —— 不标出所属轮次，
+   * 用户没办法判断「这五条到底是不是刚才那个问题的依据」。
+   */
+  subtitle?: string | null;
 }
 
-export function ReferencePanel({ references, isStreaming, hasAnswer }: ReferencePanelProps) {
+export function ReferencePanel({ references, isStreaming, hasAnswer, subtitle }: ReferencePanelProps) {
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // 切到另一轮时回到列表顶部。否则从一条长引用切到另一轮，
+  // 滚动位置会被保留，看起来像"面板没换内容"。
+  useEffect(() => {
+    listRef.current?.scrollTo({ top: 0 });
+  }, [references]);
+
   return (
     <aside className={styles.panel}>
       <div className={styles.head}>
         <h2 className={styles.title}>引用来源</h2>
         {references.length > 0 && <span className={styles.count}>{references.length} 条</span>}
+        {subtitle && <span className={styles.subtitle}>{subtitle} 的回答</span>}
       </div>
 
       {references.length > 0 ? (
-        <div className={styles.list}>
+        <div className={styles.list} ref={listRef}>
           {references.map((r, i) => (
             <ReferenceCard key={`${r.id}-${i}`} reference={r} index={i + 1} />
           ))}

@@ -25,9 +25,6 @@ interface RawReference {
 /** 标题的软上限：超过就尝试在句读/空白处切开，剩下的当摘要。 */
 const TITLE_MAX_LENGTH = 40;
 
-/** 摘要展示上限，避免把整篇文档塞进 DOM（卡片本来也只显示两行）。 */
-const SNIPPET_MAX_LENGTH = 300;
-
 /**
  * 从后端拼好的 `text` 里拆出标题和正文。
  *
@@ -76,13 +73,6 @@ function splitTitleAndBody(text: string): { title: string; body: string } {
   return { title: clean.slice(0, cutAt).trim(), body: clean.slice(cutAt).trim() };
 }
 
-/** 摘要超长时截断并加省略号。 */
-function toSnippet(body: string, fallback: string): string {
-  const source = body || fallback;
-  if (source.length <= SNIPPET_MAX_LENGTH) return source;
-  return `${source.slice(0, SNIPPET_MAX_LENGTH)}…`;
-}
-
 /**
  * 把 SSE 里的 references 负载归一化成界面用的 {@link Reference} 列表。
  *
@@ -108,7 +98,10 @@ export function normalizeReferences(raw: unknown): Reference[] {
       // id 缺失时用下标兜底，保证 React key 稳定且唯一
       id: typeof entry.id === 'string' && entry.id ? entry.id : `ref-${index}`,
       title,
-      snippet: toSnippet(body, text),
+      // 摘要**不在这里截断**：卡片折叠/展开由 CSS 控制（展开时要看到全文）。
+      // 原先这里硬切 300 字，而上传分块最长 512 字 —— 用户点了「展开」也看不全，
+      // 截断发生在数据层，界面层再怎么解都救不回来。
+      snippet: body || text,
       // 只接受有限数字：后端可能给 null（工具引用）或 NaN
       score: typeof entry.score === 'number' && Number.isFinite(entry.score) ? entry.score : undefined,
     };

@@ -15,9 +15,14 @@
   align-items: flex-start;
   gap: 0.625rem;                  /* 10px — tight spacing between badge and body */
   padding: 0.625rem;
-  background: rgba(255, 247, 237, 0.5);   /* warm amber tint, semi-transparent */
+  // 卡片要和面板底(#fdf4ea)拉开层次。
+  // 原来用的是半透明的暖色底 + 半透明边框，两者叠在同样暖的面板上几乎同色，
+  // 五张卡片看上去就是一大块 —— 用户根本分不清哪里是一条引用的边界。
+  // 现在改用纯白实底 + 实色边框 + 极轻投影，靠「亮度差 + 轮廓」两重手段区分。
+  background: @white;
   border-radius: 1rem;            /* fully rounded corners for a pillowy card */
-  border: 1px solid rgba(255, 237, 213, 0.5); /* subtle warm border */
+  border: 1px solid @primary-100; /* 不透明，轮廓清楚 */
+  box-shadow: @shadow-sm;         /* 极轻，只负责把卡片从底上"抬"起来一点 */
 }
 
 /* ---- Numbered reference badge ---- */
@@ -46,26 +51,134 @@
 
 .header {
   display: flex;
-  align-items: center;
+  // 顶对齐而不是居中：标题展开后可能三四行，居中的话分数徽章会飘到卡片中间，
+  // 看不出它评的是哪条标题。
+  align-items: flex-start;
   gap: 0.5rem;            /* 8px between title and any trailing element */
+  // 与编号徽章同高(1.5rem)，标题在行内垂直居中 —— 这样两者共用同一条水平中线。
+  // 不设的话行高由标题字体决定(14px × 1.625 ≈ 22.75px)，和 24px 的徽章差零点几像素，
+  // 虽然肉眼难辨，但既然要"同一行"，就把中线钉死。
+  min-height: 1.5rem;
   margin-bottom: 0.25rem; /* 4px — small gap before the snippet */
 }
 
+// ── 标题：展开 / 收起 两套互斥的类 ─────────────────────────────
+// 注意是「二选一」，**不是**「基础类 + 覆盖类」：组件里只在其中一个类名，
+// 所以两者的先后顺序无关紧要，也不依赖 `unset` 之类的重置行为。
+
 .title {
+  margin: 0;              /* ← 必填：<h4> 默认带 1.33em 上下外边距，
+                             不归零会把标题往下推 18px，和左侧编号错开一整行。 */
   font-size: 0.875rem;    /* 14px */
   font-weight: 600;
   color: @gray-800;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;    /* single-line truncation */
+  line-height: 1.625;
+  overflow-wrap: anywhere; /* 标题里出现长 URL / 无空格串时也能折行，不撑破卡片 */
 }
 
-.snippet {
-  font-size: 0.75rem;     /* 12px */
+/* 收起态：单行省略号 */
+.titleClamped {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: @gray-800;
+  line-height: 1.625;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// ── 正文：展开态走 Markdown，收起态是纯文本预览 ──────────────────
+//
+// 展开态复用全局的 .markdown-content（答案气泡那套），再按卡片尺寸整体压一档。
+// 用 :global 拼成「卡片类 + 全局类」的复合选择器提升 specificity ——
+// 这样不用赌两份样式表谁后加载。
+
+.markdown {
+  font-size: 0.75rem;     /* 12px —— 比聊天区小一档，引用是辅助信息 */
   color: @gray-500;       /* muted secondary text */
+  line-height: 1.625;
+  overflow-wrap: anywhere; /* 长 URL / 无空格串也能折行，不撑破卡片 */
+
+  &:global(.markdown-content) {
+    p {
+      margin: 0 0 0.375rem;   // 自上而下的间距统一交给段落下边距，首段不再顶出一截
+    }
+
+    p:last-child {
+      margin-bottom: 0;
+    }
+
+    ul, ol {
+      margin: 0.25rem 0 0.375rem;
+      padding-left: 1.125rem;
+    }
+
+    li {
+      margin: 0;
+    }
+
+    h1, h2, h3, h4 {
+      margin: 0.5rem 0 0.25rem;
+      font-size: 0.8125rem;   // 卡片里标题只比正文大半档，否则层级喧宾夺主
+    }
+
+    strong {
+      color: @gray-700;       // 正文偏灰，加粗再深一点才有对比
+    }
+
+    blockquote {
+      margin: 0.375rem 0;
+      padding-left: 0.625rem;
+    }
+
+    code {
+      font-size: 0.6875rem;
+    }
+
+    pre {
+      margin: 0.375rem 0;
+      padding: 0.5rem;
+      border-radius: @radius-xl;
+      font-size: 0.6875rem;
+    }
+
+    table {
+      font-size: 0.6875rem;
+    }
+
+    th, td {
+      padding: 0.25rem 0.375rem;
+    }
+  }
+}
+
+/* 收起态：两行截断（纯文本预览） */
+.snippetClamped {
+  margin: 0;
+  font-size: 0.75rem;
+  color: @gray-500;
+  line-height: 1.625;
   display: -webkit-box;
   -webkit-line-clamp: 2;          /* clamp to 2 lines; browser truncates with "…" */
   -webkit-box-orient: vertical;   /* required for line-clamp to take effect */
   overflow: hidden;
-  line-height: 1.625;             /* generous line-height for readability at 12px */
+}
+
+.toggle {
+  display: block;
+  // 右对齐、贴着内容底边：读到这里正好"要继续看就点我"
+  margin: 0.375rem 0 0 auto;
+  padding: 0;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: @primary-600;
+  background: none;
+  border: none;
+  cursor: pointer;
+
+  &:hover {
+    color: @primary-700;
+    text-decoration: underline;
+  }
 }
