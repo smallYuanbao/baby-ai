@@ -6,10 +6,10 @@ from app.models.chat import ChatMessage, ChatOptions
 from app.utils.logger import logger
 
 # 所有合法的意图标签集合，用于从 LLM 返回内容中提取有效意图
-VALID_INTENTS = {"illness", "feeding", "sleep", "development", "emergency", "daily_care", "vaccine", "general", "off_topic"}
+VALID_INTENTS = {"illness", "feeding", "sleep", "development", "emergency", "daily_care", "vaccine", "general", "file_qa", "off_topic"}
 
 # 1. 定义所有可能的意图类型（类似于 TS 的 type Intent = "illness" | "feeding" | ...）
-Intent = Literal["illness", "feeding", "sleep", "development", "emergency", "daily_care", "vaccine", "general", "off_topic"]
+Intent = Literal["illness", "feeding", "sleep", "development", "emergency", "daily_care", "vaccine", "general", "file_qa", "off_topic"]
 
 
 # ===================================================================
@@ -141,6 +141,23 @@ INTENT_APPENDS: Dict[Intent, str] = {
 - **不要**编造就医建议，**不要**补免责声明；
 - **不要**提「知识库」「参考资料」这类内部机制 —— 那是我们系统内部的事；
 - 如果是打招呼或询问你的身份，顺带说清你能帮什么忙，并把话题自然引回育儿。""",
+
+    # 就着用户上传的文件回答。
+    #
+    # 为什么需要独立一档：用户上传完文件后打的第一句话往往没有信息量（「帮我看看」），
+    # 脱离附件看它确实"与育儿无关"，但那只是**问题文本**没有信息，不是**这件事**与育儿无关。
+    # 这一档存在的意义就是把判断依据从"问题文本"换成"问题 + 文件"。
+    "file_qa": """你是"小熊育儿助手"🐻 —— 一个专注 0-6 岁宝宝养育与健康的 AI 助手。
+
+用户附上了一份文件，并希望你**就着这份文件**回答。请：
+
+- 先直接回答用户的问题，内容以文件里的信息为准；文件里没写的，明确说"这份文件里没提到"，不要编；
+- **不要**套用五段式问诊结构 —— 那是给"宝宝发烧怎么办"这类问题用的，用来读文件会很别扭；
+  按问题的实际需要组织即可；
+- 如果文件内容涉及宝宝的健康指标、用药或异常数值，给出判断的同时保留就医提示
+  （🔴立即就医 / 🟡建议就诊 / 🟢继续观察）；
+- 如果读下来发现文件**其实与育儿无关**（简历、代码、与宝宝无关的合同等），
+  如实说明它是什么，并把话题自然引回育儿 —— 不要硬套育儿模板，也不要假装读懂了。""",
 }
 
 # 基础 System Prompt — 先分 A/B 类，再决定用不用五段式
@@ -198,7 +215,7 @@ BASE_PROMPT = f"""你是"小熊育儿助手"🐻 — 拥有 15 年临床经验�
 #   - emergency：急救要三段式简洁结构，五段式科普会稀释紧迫感；
 #   - off_topic：BASE_PROMPT 通篇是儿科问诊设定，问「你是谁」会被硬拽成问诊体
 #     （实测输出过「🚨 什么时候去医院：这个问题不用去医院😄」）。
-STANDALONE_PROMPTS = {"emergency", "off_topic"}
+STANDALONE_PROMPTS = {"emergency", "off_topic", "file_qa"}
 
 
 def build_system_prompt(intent: Intent) -> str:
@@ -349,6 +366,34 @@ LLM_CLASSIFY_PROMPT = """判断以下问题属于哪个类别，只输出一个�
 类别："""
 
 
+# 带附件时的分类 prompt —— 与上面那个的区别是：判断依据从「问题文本」变成「问题 + 文件」。
+#
+# 为什么必须换 prompt：同样一句「帮我看看」，
+#   附件是体检报告 → 这是育儿话题，该答；
+#   附件是简历     → 这是非育儿话题，该拒。
+# 只看问题文本永远分不开这两者，而用户的真实意图就藏在那份文件里。
+LLM_CLASSIFY_WITH_FILE_PROMPT = """判断这条用户消息属于哪个类别，只输出一个词。
+
+用户这次**附上了一份文件**，关于它的情况：
+{file_context}
+
+用户的问题：{question}
+
+类别：illness(疾病) feeding(喂养) sleep(睡眠) development(发育) emergency(急救) daily_care(日常护理) vaccine(疫苗) general(其他育儿问题) file_qa(就着这份文件回答) off_topic(与育儿完全无关)
+
+判断顺序（按顺序，命中即停）：
+1. **问题本身**涉及宝宝 / 育儿 → 选对应的育儿类别。文件只是补充资料，不必管它是什么。
+2. 问题本身没提育儿，但**「问题 + 文件内容」合起来**是育儿话题 → 选 `file_qa`。
+   典型：文件是体检报告 / 化验单 / 疫苗本，问题只是「帮我看看」「这份呢」。
+3. 两者都与育儿无关 → 选 `off_topic`。
+   典型：文件是简历 / 代码 / 与宝宝无关的合同，问题只是「帮我看看」。
+
+⚠️ 第 2 步和第 3 步的区别**只在文件内容**。不要因为问题文本里没出现"宝宝"就一律判 off_topic。
+拿不准时选 `file_qa` —— 用户主动附上文件是这个产品里最强的意图信号，冷落它比多答一次糟糕。
+
+类别："""
+
+
 def classify_by_keyword(question: str) -> Optional[IntentResult]:
     """
     关键词匹配分类 — 第一层分诊
@@ -418,10 +463,21 @@ def classify_by_keyword(question: str) -> Optional[IntentResult]:
     return None
 
 
-def classify_by_llm(question: str) -> Intent:
+def classify_by_llm(question: str, file_context: Optional[str] = None) -> Intent:
     try:
         # 1. 构建单条 user 消息（分类不需要 system prompt 和历史）
-        prompt_text = LLM_CLASSIFY_PROMPT.replace("{question}", question)
+        #
+        # 带附件时换一个 prompt：判断依据从「问题文本」变成「问题 + 文件摘要」。
+        # 同样一句「帮我看看」，附件是体检报告该答、是简历该拒 —— 只看问题文本
+        # 永远分不开这两者。（见 LLM_CLASSIFY_WITH_FILE_PROMPT 的说明。）
+        if file_context:
+            prompt_text = (
+                LLM_CLASSIFY_WITH_FILE_PROMPT
+                .replace("{file_context}", file_context)
+                .replace("{question}", question)
+            )
+        else:
+            prompt_text = LLM_CLASSIFY_PROMPT.replace("{question}", question)
 
         # 2. 调用 DeepSeek（temperature=0 保证确定性；预算用 SHORT_TASK_MAX_TOKENS）
         #
@@ -449,7 +505,7 @@ def classify_by_llm(question: str) -> Intent:
         logger.warning("意图路由 [静默降级]: → LLM 不可用")
         return "general"
 
-def route_intent(question: str) -> IntentResult:
+def route_intent(question: str, file_context: Optional[str] = None) -> IntentResult:
     """
     意图路由 — 服务入口函数，双层分诊策略
 
@@ -511,6 +567,10 @@ def route_intent(question: str) -> IntentResult:
 
     Args:
         question: 用户输入的自然语言问题
+        file_context: 用户附带的文件的归类摘要（见 upload_classify.format_file_context）。
+                      **有值时**判断依据会从「问题文本」升级成「问题 + 文件」：
+                      同样一句「帮我看看」，附件是体检报告要判成 file_qa（该答），
+                      附件是简历要判成 off_topic（该拒）。没值时行为与以前完全一致。
 
     Returns:
         意图分类结果，包含拼接好的 System Prompt。LLM 失败时返回 general 意图。
@@ -541,7 +601,7 @@ def route_intent(question: str) -> IntentResult:
 
     # 调用 DeepSeek 进行 LLM 分类（或复核）
     # 分类失败时 classifyByLLM 内部静默降级为 'general'
-    llm_intent = classify_by_llm(question)
+    llm_intent = classify_by_llm(question, file_context)
 
     # 拼接 System Prompt（与 keyword 路径共用同一个入口，避免两条路径拼法不一致）
     prompt = build_system_prompt(llm_intent)

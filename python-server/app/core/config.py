@@ -68,6 +68,16 @@ GROWTH_DB_PATH = os.getenv("GROWTH_DB_PATH", "data/growth.db")
 # 对话历史的持久化路径（从内存 dict 落盘，服务重启不丢）
 SESSION_DB_PATH = os.getenv("SESSION_DB_PATH", "data/sessions.db")
 
+# ---------- 上传文件元信息存储（SQLite） ----------
+# 上传时对文件做的归类结果（摘要 + 是否育儿相关）落盘，供意图门控在之后每一轮
+# 对话里复用。**不随消息回传前端**：那等于信任客户端，按 file_id 服务端查更稳。
+UPLOAD_DB_PATH = os.getenv("UPLOAD_DB_PATH", "data/uploads.db")
+
+# 单个上传文件的大小上限（MB）。
+# 之前这个值只写在 .env.example 里，**代码里没有任何地方读它** —— 也就是说这个限制
+# 从来没生效过：传一个 500MB 的 PDF 会被整个读进内存。
+MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "10"))
+
 # ---------- 接口限流 ----------
 # 聊天端点的限流额度。**维度按用户(不是 IP)**，见 main.py 的 _rate_limit_key。
 # 抽成配置是为了能按环境调：本地/评测可以调宽，线上保持默认。

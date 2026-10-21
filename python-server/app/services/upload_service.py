@@ -42,14 +42,19 @@ import uuid
 
 from fastapi import HTTPException, UploadFile
 
+from app.core.config import MAX_FILE_SIZE_MB
 from app.services.rag.embedding import get_embedding
 
 # ============================================================
 # 配置
 # ============================================================
 
-# 允许上传的文件格式
-ALLOWED_EXTENSIONS = {"pdf", "txt"}
+# 允许上传的文件格式。
+#
+# ⚠️ 这是**唯一的事实来源**：前端不再自己写死 accept 列表，而是从
+# `GET /api/upload/formats` 拉这个集合（见 main.py）。之前两边各写一份，
+# 前端列了 9 种、后端只收 2 种，用户选个 .docx 必然撞墙。
+ALLOWED_EXTENSIONS = {"pdf", "txt", "md", "csv", "docx"}
 
 # 上传文件存储目录
 UPLOAD_DIR = "uploads"
@@ -155,40 +160,123 @@ def read_pdf(file_path: str) -> str:
     return "\n\n".join(all_parts)
 
 
+# 纯文本类：不需要任何解析，按编码回退读出来就行。
+# md 和 csv 都归到这一类 —— 它们对 RAG 来说是"可读的文本"，不需要渲染成 HTML
+# 或解析成表格；保留原始形态反而更利于分块和检索。
+PLAIN_TEXT_EXTENSIONS = {"txt", "md", "csv"}
+
+
+def _read_plain_text(file_path: str) -> str:
+    """读纯文本类文件，带编码回退。
+
+    为什么需要回退：中文 Windows 上 Excel 导出的 CSV 常见是 GBK/GB18030，
+    直接按 UTF-8 读会抛 UnicodeDecodeError —— 用户看到的会是"解析失败"，
+    而文件本身一点问题都没有。反过来，带 BOM 的 UTF-8（Excel 也爱加）要用
+    utf-8-sig 才不会在正文开头留下一个不可见字符。
+    """
+    for encoding in ("utf-8-sig", "gb18030"):
+        try:
+            with open(file_path, "r", encoding=encoding) as f:
+                return f.read()
+        except UnicodeDecodeError:
+            continue
+
+    # 两种都不行：宁可个别字变乱码，也别让整份文件传不上去
+    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+        return f.read()
+
+
+def read_docx(file_path: str) -> str:
+    """从 .docx 提取文本（标准库实现，不引入 python-docx）。
+
+    .docx 本质是个 zip，正文在 `word/document.xml`。
+
+    ## 表格必须单独处理 —— 这是这一版的重点
+
+    体检报告、化验单、疫苗记录**大量是表格**。如果简单地把所有标签剥掉再拼起来，
+    表格会被压成一整行，读出来是一坨：「身高体重头围70cm8.5kg42cm」——
+    检索命中率和模型可读性都会塌掉。
+
+    所以这里按 `<w:tbl>` → `<w:tr>` → `<w:tc>` 逐行拼，单元格之间用 ` | ` 分隔，
+    让「一行 = 一条记录」这个结构保留下来。
+    """
+    import xml.etree.ElementTree as ET
+    import zipfile
+
+    W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+
+    def node_text(node) -> str:
+        """取节点下所有 `<w:t>` 的文字（Word 会把一句话拆成多个 run）。"""
+        return "".join(t.text or "" for t in node.iter(W + "t"))
+
+    with zipfile.ZipFile(file_path) as zf:
+        xml_bytes = zf.read("word/document.xml")
+
+    root = ET.fromstring(xml_bytes)
+    body = root.find(W + "body")
+    if body is None:
+        return ""
+
+    blocks: list[str] = []
+    for child in body:
+        if child.tag == W + "p":
+            text = node_text(child).strip()
+            if text:
+                blocks.append(text)
+        elif child.tag == W + "tbl":
+            rows: list[str] = []
+            for tr in child.iter(W + "tr"):
+                cells = [node_text(tc).strip() for tc in tr.findall(W + "tc")]
+                if any(cells):
+                    rows.append(" | ".join(cells))
+            if rows:
+                blocks.append("\n".join(rows))
+
+    # 段落之间空一行：既保留阅读结构，也让后面的分块更容易切在语义边界上
+    return "\n\n".join(blocks)
+
+
+# 需要专门解析器的二进制格式。
+# 加新格式时**只往这张表里加一行**，不用再动 read_file 的分支逻辑。
+#
+# ⚠️ 这张表必须定义在 read_docx 之后：Python 在导入时就会求值字典里的名字，
+# 放前面会直接 NameError（我第一版就是这么写的）。
+BINARY_PARSERS = {
+    "pdf": (read_pdf, "PDF 解析失败"),
+    "docx": (read_docx, "Word 文档解析失败"),
+}
+
+
 def read_file(file_path: str, extension: str) -> str:
     """
     按文件扩展名分发到对应解析器。
 
     Args:
         file_path: 文件在磁盘上的绝对路径
-        extension: 小写的文件扩展名（pdf / txt）
+        extension: 小写的文件扩展名
 
     Returns:
-        解析后的纯文本字符串（PDF 可能含 Markdown 标题标记）
+        解析后的纯文本字符串
     """
-    if extension == "txt":
-        # TXT 最简单 — 直接 UTF-8 读
-        with open(file_path, "r", encoding="utf-8") as f:
-            return f.read()
+    if extension in PLAIN_TEXT_EXTENSIONS:
+        return _read_plain_text(file_path)
 
-    if extension == "pdf":
-        try:
-            return read_pdf(file_path)
-        except ImportError:
-            # PyMuPDF (fitz) 没有安装
-            raise HTTPException(
-                status_code=500,
-                detail="PyMuPDF 未安装，无法处理 PDF。请运行: pip install pymupdf",
-            )
-        except Exception as e:
-            # PDF 文件损坏、加密、不是有效 PDF 等
-            raise HTTPException(
-                status_code=500,
-                detail=f"PDF 解析失败: {e}",
-            )
+    entry = BINARY_PARSERS.get(extension)
+    if entry is None:
+        # 理论上不会走到：外层已经按 ALLOWED_EXTENSIONS 校验过了
+        raise HTTPException(status_code=400, detail=f"不支持的文件格式: {extension}")
 
-    # 走到这里说明扩展名不在支持列表中（理论上不会，外层已有校验）
-    raise HTTPException(status_code=400, detail=f"不支持的文件格式: {extension}")
+    parser, label = entry
+    try:
+        return parser(file_path)
+    except ImportError as e:
+        # 解析器依赖没装（例如 PyMuPDF）
+        raise HTTPException(status_code=500, detail=f"{label}：缺少解析依赖（{e}）")
+    except HTTPException:
+        raise
+    except Exception as e:
+        # 文件损坏、加密、不是有效文件等
+        raise HTTPException(status_code=500, detail=f"{label}: {e}")
 
 
 # ============================================================
@@ -376,9 +464,30 @@ def process_upload(file: UploadFile, user_id: str):
     ext = file.filename.split(".")[-1].lower()
 
     if ext not in ALLOWED_EXTENSIONS:
+        # 原先写的是 f"仅支持 {ALLOWED_EXTENSIONS} 格式" —— 把 Python 的 set 直接
+        # 格式化进字符串，用户看到的是「仅支持 {'txt', 'pdf'} 格式」，带花括号和引号。
+        supported = "、".join(sorted(x.upper() for x in ALLOWED_EXTENSIONS))
         raise HTTPException(
             status_code=400,
-            detail=f"仅支持 {ALLOWED_EXTENSIONS} 格式",
+            detail=f"不支持 .{ext} 格式。目前支持：{supported}",
+        )
+
+    # ============================================================
+    # Step 1b：大小校验
+    # ============================================================
+    # 必须在**写盘之前**拦：否则一个超大文件会先落到磁盘上、再被整个读进内存解析。
+    #
+    # 不用 `file.size`：它在部分 starlette 版本里构造后是 None，读的过程中才更新，
+    # 直接问底层文件对象更可靠。
+    file.file.seek(0, 2)
+    size_bytes = file.file.tell()
+    file.file.seek(0)
+
+    limit_bytes = MAX_FILE_SIZE_MB * 1024 * 1024
+    if size_bytes > limit_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"文件过大：{size_bytes / 1024 / 1024:.1f} MB，上限 {MAX_FILE_SIZE_MB} MB",
         )
 
     # ============================================================
@@ -400,6 +509,54 @@ def process_upload(file: UploadFile, user_id: str):
     raw_text = read_file(file_path, ext)            # PDF → 纯文本（含标题标记）
     cleaned_text = clean_text(raw_text)              # 去噪声
     chunks = chunk_text_semantic(cleaned_text)       # 语义分块
+
+    # ============================================================
+    # Step 3a：可读性校验
+    # ============================================================
+    # 扫描件 / 纯图片 PDF 解析出来是空文本。以前这种文件会**一路走到底**：
+    # 上传成功、chunks 为 0、Chroma 里一条都没有 —— 用户以为助手能读，
+    # 实际上这份文件是死的，而且界面不会有任何提示。（实测：一份 697KB 的
+    # 房屋租赁合同 PDF 就是这种情况。）
+    #
+    # 与其静默收下一个不可用的文件，不如当场说清楚。
+    if not chunks:
+        # 已经落盘的文件要清掉，别留垃圾
+        try:
+            os.remove(file_path)
+        except OSError:
+            pass
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "这份文件里没有可提取的文字（可能是扫描件或纯图片）。"
+                "目前还不支持 OCR —— 可以试试转成带文字的 PDF，或者直接把关键内容贴到输入框里。"
+            ),
+        )
+
+    # ============================================================
+    # Step 3b：文件归类（摘要 + 是否育儿相关）
+    # ============================================================
+    # 放在上传时做，而不是每轮对话做：一份文件只判一次，成本一次性。
+    # 结论有两个用处：
+    #   ① 回给前端 → 用户在提问**之前**就知道这东西助手帮不帮得上忙；
+    #   ② 存起来 → 之后每轮对话的意图门控拿它判断「问题 + 文件」合起来是不是育儿问题。
+    # 失败一律降级成「未知」，绝不让上传失败 —— 分类是增强，不是必要条件。
+    from app.services.upload_classify import classify_uploaded_file
+    from app.services import upload_store
+
+    summary, parenting_related = classify_uploaded_file(cleaned_text, file.filename or "")
+    try:
+        upload_store.save_file_meta(
+            file_id=file_id,
+            user_id=user_id,
+            filename=file.filename or "",
+            summary=summary,
+            parenting_related=parenting_related,
+        )
+    except Exception as e:
+        # 存不下来只影响"之后的门控拿不到摘要"，文件本身已经能用。
+        from app.utils.logger import logger
+        logger.warning("[文件归类] 元信息落盘失败（不影响上传）：%s: %s", type(e).__name__, e)
 
     # ============================================================
     # Step 4：向量化 + 入库 ChromaDB
@@ -434,4 +591,8 @@ def process_upload(file: UploadFile, user_id: str):
         "file_id": file_id,
         "chunks_count": len(chunks),
         "size": os.path.getsize(file_path),
+        # 归类结果一并回给前端：让人在提问**之前**就知道帮不帮得上忙。
+        # 两个都可能是 None（"没判出来"），前端要按"不提示"处理，不能当成"否"。
+        "summary": summary,
+        "parenting_related": parenting_related,
     }
