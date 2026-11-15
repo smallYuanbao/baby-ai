@@ -78,6 +78,9 @@ const CONFIG = {
   neighbors: {
     5173: 'evalflow 前端',
     8002: 'evalflow 后端',
+    5190: 'ecom-agent 前端',
+    8090: 'ecom-agent 后端',
+    8091: 'ecom-agent 评测',
   },
 };
 

@@ -249,6 +249,9 @@ npm run dev:client   # 只起前端（Vite，5180）
 | 后端 (FastAPI) | 8010 |
 | 精排 (BGE reranker) | 8011 |
 | ChromaDB | 8000 |
+| ecom-agent 前端 | 5190 |
+| ecom-agent 后端 | 8090 |
+| ecom-agent 评测 | 8091 |
 
 > ⚠️ **`npm run dev:legacy-server` 是老版 Express + TypeScript 后端**（端口 **8020**），
 > 不承担业务流量，保留只为对照阅读。日常开发不需要它。
