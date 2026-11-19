@@ -16,7 +16,9 @@
   DRY_RUN: 是否只预览不灌入（默认 True，先看效果）
 """
 
+import argparse
 import csv
+import hashlib
 import json
 import os
 import sys
@@ -167,8 +169,16 @@ def sample_balanced(categorized: dict[Intent, list[dict]]) -> list[dict]:
 # Step 3: 灌入 ChromaDB
 # ============================================================
 
-def ingest(selected: list[dict]):
-    """逐条生成 embedding → 灌入 ChromaDB"""
+def ingest(selected: list[dict], reset: bool = False):
+    """逐条生成 embedding → 灌入 ChromaDB（内容哈希 ID + upsert，可重复执行）"""
+    if reset:
+        try:
+            chroma_client.delete_collection("rag_medical")
+            print("  🧹 已删除旧集合 rag_medical")
+        except Exception:
+            # 集合不存在时忽略
+            pass
+
     total = len(selected)
     collection = chroma_client.get_or_create_collection(name="rag_medical")
 
@@ -186,10 +196,12 @@ def ingest(selected: list[dict]):
                 text = f"【{item['department']}】{item['title']}\n问：{item['question']}\n答：{item['answer']}"
                 emb = get_embedding(text)
 
-                import uuid
-                doc_id = f"med_{uuid.uuid4().hex[:8]}"
+                # 内容哈希：同样的记录重复执行会覆盖同一条，而不是新增
+                doc_id = "med_" + hashlib.sha1(
+                    f"{item['department']}|{item['title']}|{item['question']}".encode("utf-8")
+                ).hexdigest()[:16]
 
-                collection.add(
+                collection.upsert(
                     documents=[text],
                     embeddings=[emb],
                     ids=[doc_id],
@@ -226,9 +238,29 @@ def ingest(selected: list[dict]):
 # ============================================================
 
 def main():
+    global DRY_RUN, PER_CATEGORY
+
+    parser = argparse.ArgumentParser(description="按意图分类均衡灌入 rag_medical")
+    parser.add_argument("--reset", action="store_true", help="灌入前删除 rag_medical 集合")
+    parser.add_argument("--dry-run", action="store_true", help="只预览不灌入")
+    parser.add_argument(
+        "--per-category",
+        type=int,
+        default=PER_CATEGORY,
+        help=f"每类最多灌入条数（默认 {PER_CATEGORY}）",
+    )
+    args = parser.parse_args()
+
+    PER_CATEGORY = args.per_category
+    if args.dry_run:
+        DRY_RUN = True
+
     print("=" * 60)
     print("🏥 按意图分类均衡灌入")
-    print(f"   每类上限: {PER_CATEGORY} 条, DRY_RUN: {DRY_RUN}")
+    print(
+        f"   每类上限: {PER_CATEGORY} 条, "
+        f"DRY_RUN: {DRY_RUN}, reset: {args.reset}"
+    )
     print("=" * 60 + "\n")
 
     categorized = read_and_classify()
@@ -241,10 +273,10 @@ def main():
             print(f"  问: {item['question'][:100]}...")
             print(f"  答: {item['answer'][:100]}...")
             print()
-        print(f"如需灌入，设置 DRY_RUN = False 后重新运行")
+        print(f"如需灌入，去掉 --dry-run 后重新运行")
     else:
         print(f"\n📚 开始灌入 {len(selected)} 条...\n")
-        ingest(selected)
+        ingest(selected, reset=args.reset)
 
 
 if __name__ == "__main__":

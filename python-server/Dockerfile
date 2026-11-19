@@ -24,14 +24,17 @@ ENV PATH="/opt/venv/bin:$PATH"
 # 复制代码
 WORKDIR /app
 COPY app/ app/
-COPY .env .env
 
-# 安全加固
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+# 安全加固 + 运行期目录
+# 注意：不要把 .env 打进镜像（密钥会跟着镜像走）；运行时由 compose 注入。
+# data/uploads/logs 由 compose 挂卷覆盖，这里先建好并交给 appuser，避免首次启动权限错误。
+RUN useradd -m -u 1000 appuser \
+    && mkdir -p /app/data /app/uploads /app/logs \
+    && chown -R appuser:appuser /app
 USER appuser
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8002/api/health || exit 1
+    CMD curl -f http://127.0.0.1:8010/api/health || exit 1
 
-EXPOSE 8002
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002"]
+EXPOSE 8010
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8010"]

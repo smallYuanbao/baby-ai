@@ -10,5 +10,9 @@ RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua
 
 COPY server.py .
 
-EXPOSE 8001
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8001"]
+EXPOSE 8011
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://127.0.0.1:8011/health || exit 1
+
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8011"]

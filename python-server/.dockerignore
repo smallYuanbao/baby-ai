@@ -1,0 +1,12 @@
+.venv
+**/__pycache__
+data
+uploads
+logs
+chroma_data
+tests
+docs
+scripts
+*.md
+.env
+.env.*
