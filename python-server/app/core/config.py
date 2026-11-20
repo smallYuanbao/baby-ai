@@ -82,3 +82,8 @@ MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "10"))
 # 聊天端点的限流额度。**维度按用户(不是 IP)**，见 main.py 的 _rate_limit_key。
 # 抽成配置是为了能按环境调：本地/评测可以调宽，线上保持默认。
 CHAT_RATE_LIMIT = os.getenv("CHAT_RATE_LIMIT", "10/minute")
+
+# ---------- 公开演示的每日成本熔断 ----------
+# 当日估算成本达到该金额后，/api/* 业务请求返回 429。
+# 0 = 不限制；公开演示建议 5–10 元，配合独立的 DeepSeek key 消费限额。
+DAILY_COST_LIMIT_YUAN = float(os.getenv("DAILY_COST_LIMIT_YUAN", "5"))

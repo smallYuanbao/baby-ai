@@ -5,13 +5,13 @@ from fastapi import FastAPI, Request, File, UploadFile, Depends, HTTPException
 from datetime import datetime as Datetime
 from datetime import timezone
 
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from app.core.auth import ANONYMOUS_USER, get_current_user_id
-from app.core.config import CHAT_RATE_LIMIT
+from app.core.config import CHAT_RATE_LIMIT, DAILY_COST_LIMIT_YUAN
 from app.models.chat import ChatRequest, ChatResponse
 from app.services.chat_service import execute_rag_pipeline, execute_rag_stream
 from app.services.agent import MCPClient, agent_chat, agent_chat_mcp, mutil_agent_pipeline, react_agent_chat, react_agent_with_reflection, unified_agent
@@ -26,21 +26,37 @@ mcp_client = None
 
 app = FastAPI()
 
+def _client_ip(request: Request) -> str:
+    """取真实客户端 IP。
+
+    线上链路是 浏览器 → Caddy → frontend nginx → backend，
+    直接读 request.client.host 只会拿到 frontend 容器的内网 IP，
+    所有访客会被合并成同一个限流桶。Caddy/nginx 会写 X-Forwarded-For，
+    取第一个地址就是真实客户端。
+
+    注意：Caddy 侧应使用 header_up X-Forwarded-For {remote_host} 覆盖客户端
+    自带的伪造值；否则第一个地址可能被伪造。
+    """
+    xff = request.headers.get("x-forwarded-for", "")
+    if xff:
+        first = xff.split(",")[0].strip()
+        if first:
+            return first
+    return request.headers.get("x-real-ip") or get_remote_address(request)
+
+
 def _rate_limit_key(request: Request) -> str:
-    """限流分桶的键:**按用户,不按 IP**。
+    """限流分桶的键。
 
-    按 IP 会误伤:公司/学校 NAT 后的多个用户共用一个出口 IP、互相抢额度;
-    本地开发时全是 127.0.0.1,整台机器共用一个桶。既然已经用 user_id 做了多租户隔离,
-    限流就该跟上这个维度——否则隔离做了、限额没做,一半一半。
-
-    匿名请求退回按 IP 分桶:不然所有匿名用户挤同一个桶,一个人刷就把别人挡了。
-    凭据无效的交给鉴权层返回 401,这里只管分桶,不重复判。
+    - 带 Bearer（curl/旧客户端）：按 user_id 分桶；
+    - 应用层现在走 X-API-Key（公开演示）：退回按真实客户端 IP 分桶，
+      避免所有访客共用 dev-key-alice 一个桶。
     """
     try:
         uid = get_current_user_id(request.headers.get("authorization"))
     except HTTPException:
         uid = ANONYMOUS_USER
-    return uid if uid != ANONYMOUS_USER else f"ip:{get_remote_address(request)}"
+    return uid if uid != ANONYMOUS_USER else f"ip:{_client_ip(request)}"
 
 
 # 限流中间件:超限返回 429(对应高并发-题5 恶意请求限流)
@@ -48,6 +64,37 @@ def _rate_limit_key(request: Request) -> str:
 limiter = Limiter(key_func=_rate_limit_key)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+# 公开演示的每日成本熔断：
+# 当日估算成本达到 DAILY_COST_LIMIT_YUAN 后，业务接口直接 429，
+# 避免被爬虫/陌生人刷爆 DeepSeek 账单。
+# 健康检查、meta、成本查询、上传格式说明不消耗 LLM，保持可用。
+_BUDGET_EXEMPT_PATHS = {
+    "/api/health",
+    "/api/meta",
+    "/api/admin/cost",
+    "/api/upload/formats",
+}
+
+
+@app.middleware("http")
+async def budget_guard(request: Request, call_next):
+    if (
+        DAILY_COST_LIMIT_YUAN > 0
+        and request.url.path.startswith("/api/")
+        and request.url.path not in _BUDGET_EXEMPT_PATHS
+        and cost_tracker.over_budget(DAILY_COST_LIMIT_YUAN)
+    ):
+        return JSONResponse(
+            status_code=429,
+            content={
+                "detail": "今日演示额度已用完，请明天再试。",
+                "limit_yuan": DAILY_COST_LIMIT_YUAN,
+                "cost": cost_tracker.get_daily_cost(),
+            },
+        )
+    return await call_next(request)
 
 start_time = Datetime.now()
 
@@ -159,7 +206,12 @@ def upload_formats():
 # 文件上传：解析 → 清洗 → 分块 → 向量化 → 入库 ChromaDB（供 RAG 检索）
 # 返回前端契约（驼峰字段），对齐 client 的 UploadResponse 类型
 @app.post("/api/upload")
-async def upload_file(file: UploadFile = File(...), user_id: str = Depends(get_current_user_id)):
+@limiter.limit("5/minute")
+async def upload_file(
+    request: Request,
+    file: UploadFile = File(...),
+    user_id: str = Depends(get_current_user_id),
+):
     result = process_upload(file, user_id)
     return {
         "fileId": result["file_id"],
