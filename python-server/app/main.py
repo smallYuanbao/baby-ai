@@ -10,7 +10,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from app.core.auth import ANONYMOUS_USER, get_current_user_id
+from app.core.auth import API_KEYS, get_current_user_id
 from app.core.config import CHAT_RATE_LIMIT, DAILY_COST_LIMIT_YUAN
 from app.models.chat import ChatRequest, ChatResponse
 from app.services.chat_service import execute_rag_pipeline, execute_rag_stream
@@ -48,15 +48,26 @@ def _client_ip(request: Request) -> str:
 def _rate_limit_key(request: Request) -> str:
     """限流分桶的键。
 
-    - 带 Bearer（curl/旧客户端）：按 user_id 分桶；
-    - 应用层现在走 X-API-Key（公开演示）：退回按真实客户端 IP 分桶，
-      避免所有访客共用 dev-key-alice 一个桶。
+    - 带有效 X-API-Key / Bearer：按 user_id 分桶；
+    - 没带或无效：按真实客户端 IP 分桶，避免所有访客共用
+      dev-key-alice 一个桶。
+
+    注意：这里不能手动调用 get_current_user_id——它是 FastAPI dependency，
+    参数默认值是 Header 对象，不是普通字符串。直接解析请求头更安全。
     """
-    try:
-        uid = get_current_user_id(request.headers.get("authorization"))
-    except HTTPException:
-        uid = ANONYMOUS_USER
-    return uid if uid != ANONYMOUS_USER else f"ip:{_client_ip(request)}"
+    token = (request.headers.get("x-api-key") or "").strip()
+    if not token:
+        authorization = request.headers.get("authorization") or ""
+        scheme, _, bearer = authorization.partition(" ")
+        if scheme.lower() == "bearer":
+            token = bearer.strip()
+
+    if token:
+        uid = API_KEYS.get(token)
+        if uid:
+            return uid
+
+    return f"ip:{_client_ip(request)}"
 
 
 # 限流中间件:超限返回 429(对应高并发-题5 恶意请求限流)
