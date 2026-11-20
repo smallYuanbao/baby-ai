@@ -96,3 +96,32 @@
   font-size: @text-xs;       // 12px — intentionally small so it doesn't compete with the title
   color: @gray-400;          // muted gray for secondary hierarchy
 }
+
+// ------------------------------------------------------------------
+//  User switcher
+// ------------------------------------------------------------------
+//  Right-aligned select for the 方案 A 轻量鉴权 demo — 切换当前登录用户
+//  （alice / bob）以演示服务端多租户隔离。margin-left: auto 把它推到
+//  header 最右侧，与左侧的 logo + 标题形成两端布局。
+// ------------------------------------------------------------------
+.userSwitcher {
+  margin-left: auto;              // 推到 header 最右侧
+  min-width: 7rem;                // 给「👩 Alice」留够宽度，又不至于把标题挤走
+
+  // 原来这里有 30 多行自绘样式（appearance:none + 手画 SVG 箭头 + 自己算的内边距），
+  // 因为原生 <select> 的箭头会压在圆角边框上。换成 antd Select 后这些统统不需要了 ——
+  // 连展开的弹层也一起归 antd 管，那层本来就不是 CSS 能碰到的（见 Header.tsx 的注释）。
+}
+
+
+// ---------------------------------------------------------------------------
+// 切换用户时的全屏遮罩
+// ---------------------------------------------------------------------------
+// position: fixed 铺满视口（不只是 header 那块），因为接下来发生的是整页刷新。
+.switchOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;                 // 盖住 header(100) 和 Modal(1000)
+  display: flex;
+  background: rgba(255, 251, 245, 0.94);   // 暖白，和页面底色一致
+}

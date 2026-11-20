@@ -54,6 +54,50 @@ body {
 }
 
 // ============================================================
+//  Base — box-sizing
+// ============================================================
+// Chrome 的 UA 样式表只给 button / input / select 设了 border-box，**漏掉了
+// textarea**，其余元素一概按 content-box 算。于是 `width: 100%` 再叠加
+// padding + border 就会比容器宽出那一圈。
+//
+// 实测症状：聊天输入框 (.textarea) 设了 width:100%，同时又吃 10px/16px 内边距
+// 和 1px 边框 → 实际比父容器宽 34px，右端直接钻到发送按钮底下，看起来像
+// 「发送按钮和输入框重叠」。统一成 border-box 后，width 就是含边框和内边距的
+// 总宽，这类溢出从根上消失。
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+// ============================================================
+//  Base — form controls
+// ============================================================
+// 浏览器给 button / input / select / textarea 都带了一套默认外观：
+// 灰底(buttonface)、2px outset 黑边、1px 6px 内边距、系统字体。
+// 各组件的 CSS Modules 只设了它想改的那几项，**没设到的就漏出浏览器默认样式**——
+// 所以底部的文件/语音按钮是灰底加黑边、成长页的「添加宝宝」是黑边框。
+//
+// 这里统一清干净，最终长相完全交给组件自己的样式决定。
+// 注意：不给 select 清 appearance —— 项目里有 4 个原生 <select>（用户切换、
+// 成长表单、宝宝说），一律抹掉会让它们全部丢掉下拉箭头。
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+// ============================================================
 //  Scrollbar — Custom Webkit scrollbar styling
 // ============================================================
 //  Replaces the default browser scrollbar with a subtle, branded version.
@@ -291,4 +335,27 @@ body {
   tbody tr:nth-child(even) {
     background: rgba(249, 250, 251, 0.5); // gray-50 at 50% opacity
   }
+}
+
+// ============================================================
+//  antd 兼容补丁
+// ============================================================
+// 这是整个样式层**唯一**直接写 `.ant-*` 的地方。理由：这一项 antd 的
+// ConfigProvider theme token 覆盖不到，但它是设计上的硬要求。
+//
+// 【表单 label 的字重】
+//
+// antd 的 Form 组件 token 有 labelFontSize / labelColor，**唯独没有 labelFontWeight**，
+// 生成出来的 label 固定是 `font-weight: 400`。
+//
+// 为什么必须补：本项目为了对齐 16px 正文，把 antd 的 seed `fontSize` 从默认的 14
+// 抬到了 16，label 跟着一起变大。结果是 label 和输入框里的内容**同色同号同字重**
+// （浏览器实测均为 `16px / 400 / #1f2937`），完全看不出哪个是标签。
+// 字号和颜色已在 src/theme.ts 的 components.Form 里调开（14px / @gray-900），
+// 字重没有 token 可用，只能在这里补一条。
+//
+// 影响面是所有 antd 表单的 label —— 这正是想要的：项目里 label 统一 600 字重。
+// 如果哪天 antd 补上了 labelFontWeight，请把这条删掉改回 token。
+.ant-form-item-label > label {
+  font-weight: 600;
 }

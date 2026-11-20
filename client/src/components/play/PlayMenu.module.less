@@ -1,78 +1,100 @@
 // PlayMenu.module.less
-// Styles for the PlayMode selection screen — a scrollable list of activity cards
-// (Story, Riddle, Babytalk) with gradient backgrounds, icons, titles, and descriptions.
-// Organised as a vertical flex column wrapping themed .menuItem cards.
+// Styles for the PlayMode selection screen — three activity cards
+// (Story / Riddle / Babytalk), colour-coded by activity type.
 
 @import '../../styles/variables.less';
 
 // ---------------------------------------------------------------------------
-// Layout wrapper — scrollable vertical column
+// Layout wrapper — 桌面三列网格
 // ---------------------------------------------------------------------------
+// 踩过：原来这里是 `flex-direction: column` + 每张卡 `width: 100%`，没有宽度上限。
+// 那套是照窄屏设计的（手机上一列铺满是合理的），搬到 1440px 桌面上之后，
+// 每张卡被拉到 **1272px 宽 × 130px 高** —— 三条巨大的长条，
+// 而且正因为"长得都一样"，反而看不出这是个三选一。
+//
+// 桌面本来就是三选一，用三列网格既贴合语义又能把空间用起来。
 .wrapper {
-  flex: 1;                      // fill remaining space in parent flex container
-  overflow-y: auto;             // scroll when content overflows vertically
-  padding: 1rem;
-  display: flex;
-  flex-direction: column;       // stack menu items vertically
-  gap: 0.75rem;                 // spacing between menu cards
+  flex: 1;                      // 撑满父容器剩余空间
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  align-content: start;         // 行高按内容来，不要被拉满整屏
+  width: 100%;
+  max-width: 60rem;             // 超宽屏下别把三张卡摊得太开
+  margin: 0 auto;               // 居中
+  padding: 2rem 1.5rem 1.5rem;
 }
 
 // ---------------------------------------------------------------------------
-// Menu card — tap target for each play mode
+// Menu card — 竖排：图标 / 标题 / 描述，箭头固定右上角
 // ---------------------------------------------------------------------------
 .menuItem {
-  width: 100%;
-  padding: 1rem;
+  position: relative;           // 给右上角的箭头做定位父级
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;      // 内容左对齐（原来的横向布局靠 align-items:center）
+  padding: 1.5rem 1.25rem;
   border-radius: 1.25rem;
   text-align: left;
-  transition: all 200ms;        // smooth hover lift / shadow
+  transition: all @transition-base;
 
+  // hover 用「上浮」而不是「放大」：卡片变宽会挤到相邻卡片，上浮不会。
   &:hover {
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); // subtle elevation on hover
-    transform: scale(1.02);                           // gentle grow effect
+    box-shadow: 0 6px 16px -4px rgba(0, 0, 0, 0.12);
+    transform: translateY(-2px);
+
+    .menuArrow {
+      opacity: 1;                 // 悬浮才显形
+      transform: translateX(0);   // 从左边滑到位
+      color: @gray-600;
+    }
+  }
+
+  &:active {
+    transform: translateY(0) scale(0.98);
   }
 }
 
 // ---------------------------------------------------------------------------
-// Inner layout — icon + text + arrow
-// ---------------------------------------------------------------------------
-.menuItemInner {
-  display: flex;
-  align-items: center;          // vertically centre icon, text, and arrow
-  gap: 0.75rem;                 // horizontal gap between icon and text block
-}
-
-// ---------------------------------------------------------------------------
-// Icon — emoji / symbol for the activity
+// Icon / title / description
 // ---------------------------------------------------------------------------
 .menuIcon {
-  font-size: 1.875rem;          // large icon (30px at default root size)
-}
-
-// ---------------------------------------------------------------------------
-// Text block — title + description pair
-// ---------------------------------------------------------------------------
-.menuText {
-  // container for .menuTitle and .menuDesc — no extra styling needed
+  font-size: 2.25rem;           // 36px —— 竖排卡片里图标是视觉主体，比原来的 30px 再大一点
+  line-height: 1;
+  margin-bottom: 0.875rem;
 }
 
 .menuTitle {
   font-weight: 600;
-  color: @gray-800;             // high-contrast title using design token
+  color: @gray-800;
 }
 
 .menuDesc {
-  font-size: 0.75rem;           // small secondary text
-  color: @gray-500;             // muted description using design token
-  margin-top: 0.125rem;         // tiny gap between title and description
+  font-size: 0.8125rem;         // 13px
+  color: @gray-500;
+  margin-top: 0.375rem;
+  line-height: 1.6;
 }
 
 // ---------------------------------------------------------------------------
-// Arrow — trailing chevron indicating tappability
+// Arrow — 固定右上角，**只在 hover 时出现**
 // ---------------------------------------------------------------------------
+// 为什么要藏起来：整张卡片本来就是点击区域，而箭头会把视线引到右上角那一个小点上，
+// 暗示"只有那儿能点"。而且卡片 hover 时已经有上浮 + 阴影在表达"可点"了，
+// 静止状态下再挂一个箭头属于重复提示、还跟标题抢注意力。
+//
+// 保留而不是删掉：它确实传达了"点进去是另一个界面"这层意思，
+// 而且子界面里都有「返回」（StoryTime / RiddleGame / BabyTalk 都接了 onBack），
+// 一进一出的语义是自洽的。挂在 hover 上就两全了 —— 用户表现出意图时才提示。
 .menuArrow {
-  margin-left: auto;            // push arrow to the far end of the row
-  color: @gray-300;             // light, subtle arrow
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+  color: @gray-400;
+  opacity: 0;                   // 静止时隐藏
+  transform: translateX(-4px);  // 略微左移，出现时有"往里送"的感觉
+  transition: opacity @transition-base, transform @transition-base, color @transition-base;
 }
 
 // ---------------------------------------------------------------------------

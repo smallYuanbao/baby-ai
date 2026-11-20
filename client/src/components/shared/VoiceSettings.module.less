@@ -1,0 +1,63 @@
+@import '../../styles/variables.less';
+
+// 语音设置行：音色 + 语速 + 完成。
+// 高度和工具栏里的其它按钮一致，展开时不明显撑高工具栏。
+
+.row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: @gray-500;
+}
+
+.label {
+  white-space: nowrap;
+}
+
+// 下拉框 —— antd 的 <Select>。
+//
+// 布局归这里，配色归 antd，但要把它拉回本项目的暖色调：
+// antd 默认是「白底 + 冷灰边」，和工具栏的暖色体系放在一起像两套设计语言。
+.select {
+  // antd 6 的 Select 把「底色 / 边框色」声明成根元素上的 CSS 变量：
+  //   --ant-select-background-color / --ant-select-border-color
+  // 覆盖点就是重新声明这两个变量（同 BabyTalk.module.less 的做法）。
+  // 特异性 (0,2,0) 压得住 antd 基础规则 (0,1,0)，但压不住 hover (0,3,0) ——
+  // 这是故意的：hover / focus 继续交给 antd，取 theme.ts 映射好的品牌橙。
+  &:global(.ant-select) {
+    --ant-select-background-color: @surface-light;
+    --ant-select-border-color: @primary-100;
+    font-size: 0.75rem;   // 工具栏控件保持 12px，别跟正文 16px 一样大
+  }
+}
+
+// 音色名字较长（「Google 普通话（中国大陆）」），给足宽度但别撑爆工具栏
+.voiceSelect {
+  width: 12rem;
+}
+
+.rateSelect {
+  width: 5rem;
+}
+
+// 「完成」：低强调的文字按钮，和「清空对话」同层级
+.done {
+  font-size: 0.75rem;
+  color: @gray-400;
+  padding: 0.25rem 0.5rem;
+  border-radius: @radius-xl;
+  transition: color, background-color 200ms;
+
+  &:hover {
+    color: @gray-600;
+    background: @gray-50;
+  }
+}

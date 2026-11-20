@@ -8,6 +8,11 @@
  * - The currently selected child's full detail (including growth records)
  * - Shared loading / error UI state
  *
+ * ⚠️ **本文件是实现，不是入口。** 组件请用 `contexts/GrowthContext` 导出的 `useGrowth()`。
+ * `<GrowthProvider>` 在这里调用**一次** `useGrowthState()`，把返回值放进 context 共享给
+ * 整棵成长模块的组件树。直接调 `useGrowthState()` 会让每个调用点各持一份 state ——
+ * 那正是「新增记录后列表不更新」这个 bug 的成因。
+ *
  * ## Data Flow
  * Components (e.g. GrowthDashboard, ChildForm, RecordEditor) import this hook to
  * read state (`children`, `selectedChild`, `loading`, `error`) and to dispatch
@@ -34,7 +39,7 @@ import { api } from '../services/api';
 import type { Child, ChildSummary, GrowthRecord, ChartDataResponse } from '../types/growth';
 
 /**
- * Growth data-management hook.
+ * 成长模块的状态实现 —— 由 `<GrowthProvider>` 调用一次。
  *
  * Provides all state and actions needed by the Growth feature: child CRUD,
  * growth-record CRUD, chart-data retrieval, and shared loading/error UI state.
@@ -58,6 +63,7 @@ import type { Child, ChildSummary, GrowthRecord, ChartDataResponse } from '../ty
  *     Called automatically on mount.
  *   - `loadChild: (childId: string) => Promise<void>` — Fetch full detail for
  *     one child, replacing `selectedChild`. Sets `loading` while in flight.
+ *   - `clearSelectedChild: () => void` — 清空选中，回到宝宝选择器视图。
  *   - `createChild: (data) => Promise<Child>` — Create a child profile, then
  *     re-fetch the list so the picker stays up-to-date. **Re-throws** on failure
  *     so the calling form can handle field-level validation.
@@ -85,7 +91,18 @@ import type { Child, ChildSummary, GrowthRecord, ChartDataResponse } from '../ty
  *   - `setError: (message: string | null) => void` — Imperatively clear or set
  *     the global error. Useful for dismissing error banners on user interaction.
  */
-export function useGrowth() {
+/**
+ * ⚠️ **不要从组件里直接调用这个函数** —— 用 `contexts/GrowthContext` 导出的 `useGrowth()`。
+ *
+ * 它用 `useState` 持有成长模块的全部状态，所以**每个调用点都会拿到一份彼此独立的 state**。
+ * 之前就是直接调它，后果是 `addRecord()` 里那句「刷新 selectedChild」刷新的是**表单自己
+ * 那份没人渲染的副本** —— 症状是「新增记录后列表不更新，要刷新页面才看得到」。
+ *
+ * 现在它只被 `<GrowthProvider>` 调用一次，状态的唯一入口是 context。
+ * 名字从 `useGrowth` 改成 `useGrowthState` 也是刻意的：让人一眼看出它是"状态实现"，
+ * 不是给组件用的"状态读取"。
+ */
+export function useGrowthState() {
   // ---- State (owned by this hook, shared across the Growth feature) ----
 
   /** Lightweight list of all children; used in picker UIs. */
@@ -316,6 +333,17 @@ export function useGrowth() {
     return api.growth.getChartData(childId, metric);
   }, []);
 
+  /**
+   * 清空当前选中的宝宝，返回选择器视图（工具栏上的「← 切换宝宝」）。
+   *
+   * 单独开一个语义化方法，而不是把裸的 `setSelectedChild` 暴露出去：
+   * 调用方想说的其实是"回到选择器"，而不是"把某个 state 设成 null"。
+   * 以后若要在这里加副作用（比如清掉图表缓存），有地方可加。
+   */
+  const clearSelectedChild = useCallback(() => {
+    setSelectedChild(null);
+  }, []);
+
   // ---- Public API (returned to consuming components) ----
   return {
     // State
@@ -327,6 +355,7 @@ export function useGrowth() {
     loadChildren,
     loadChild,
     createChild,
+    clearSelectedChild,
     deleteChild,
     // Growth-record CRUD
     addRecord,

@@ -1,7 +1,8 @@
-import { useState, useRef, useCallback } from 'react';
-import { api } from '../services/api';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { api, type StoredSessionMessage } from '../services/api';
 import { useSSE } from './useSSE';
 import type { Message } from '../types/chat';
+import { normalizeReferences } from '../utils/reference';
 
 /**
  * @file useChat.ts — Core chat conversation hook
@@ -47,6 +48,55 @@ const MAX_HISTORY_ROUNDS = 8;
  */
 function generateId(): string {
   return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+/**
+ * 当前会话 id 在 localStorage 里的 key。
+ *
+ * 只存 sessionId，不存消息正文 —— 正文由服务端按 session_id 保存，
+ * 刷新后走 `GET /api/sessions/{id}` 拉回来。这样多端打开的是同一份对话，
+ * 也不会因为 localStorage 的 5MB 上限而丢消息。
+ */
+const SESSION_ID_STORAGE_KEY = 'baby-ai-session-id';
+
+/** 读取上次的会话 id；没有就生成一个并立刻持久化。 */
+function loadOrCreateSessionId(): string {
+  try {
+    const saved = localStorage.getItem(SESSION_ID_STORAGE_KEY);
+    if (saved) return saved;
+    const id = generateId();
+    localStorage.setItem(SESSION_ID_STORAGE_KEY, id);
+    return id;
+  } catch {
+    // 隐私模式等场景 localStorage 不可用：退化成"刷新即新会话"
+    return generateId();
+  }
+}
+
+/** 持久化会话 id（换新会话时调用）。 */
+function persistSessionId(sessionId: string): void {
+  try {
+    localStorage.setItem(SESSION_ID_STORAGE_KEY, sessionId);
+  } catch {
+    // 写不进去不影响本次会话
+  }
+}
+
+/**
+ * 把服务端存储的消息转成界面用的 {@link Message}。
+ *
+ * 服务端不存客户端的消息 id，这里按顺序生成稳定的本地 id；
+ * 引用存的是 SSE 原样的 `{id,text,score}`，走同一套 normalizeReferences。
+ */
+function toRestoredMessages(stored: StoredSessionMessage[], sessionId: string): Message[] {
+  return stored.map((m, index) => ({
+    id: `restored_${sessionId}_${index}`,
+    role: m.role,
+    content: m.content,
+    isStreaming: false,
+    timestamp: Date.parse(m.createdAt) || Date.now(),
+    references: m.references ? normalizeReferences(m.references) : undefined,
+  }));
 }
 
 /**
@@ -111,7 +161,41 @@ export function useChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const sessionIdRef = useRef<string>(generateId());
+  const sessionIdRef = useRef<string>(loadOrCreateSessionId());
+
+  /** 当前会话 id 的 state 投影 —— 列表高亮需要它触发渲染，ref 单独做不到。 */
+  const [sessionId, setSessionId] = useState<string>(sessionIdRef.current);
+
+  /**
+   * 挂载时恢复上次的对话。
+   *
+   * 以前 `messages` 只存在内存里，刷新就全没了；服务端虽然存了历史，
+   * 但客户端从不读、也没有持久化 sessionId，两边对不上。
+   * 现在 sessionId 落 localStorage，消息正文由服务端按 id 返回。
+   *
+   * 恢复失败（网络错误 / 旧 id 已失效）时静默当作新会话 —— 历史拉不到
+   * 不该阻止用户继续提问。
+   */
+  useEffect(() => {
+    let cancelled = false;
+    const sessionId = sessionIdRef.current;
+
+    api
+      .getSessionMessages(sessionId)
+      .then(({ messages: stored }) => {
+        if (cancelled || stored.length === 0) return;
+        const restored = toRestoredMessages(stored, sessionId);
+        // 如果用户在恢复完成前已经发了消息，不要覆盖当前对话
+        setMessages((prev) => (prev.length > 0 ? prev : restored));
+      })
+      .catch(() => {
+        /* 历史不可用：保持空会话 */
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Token batching: accumulate tokens in a ref, flush on a 50 ms timer
   // to reduce re-render frequency during fast streams.
@@ -224,7 +308,7 @@ export function useChat() {
       // The factory callback defers API call construction until connect()
       // has set up the underlying EventSource.
       await connect(
-        () => api.chatSSE(text.trim(), history, fileId),
+        () => api.chatSSE(text.trim(), history, sessionIdRef.current, fileId),
         {
           // --- Token streaming (batched) ---
           // Tokens are accumulated in a ref and flushed every 50 ms to reduce
@@ -239,12 +323,10 @@ export function useChat() {
 
           // --- Source references ---
           // The SSE endpoint may emit a references event with cited sources.
-          // Normalise the payload (array or {references: [...]}) and attach.
+          // 后端给的是 {id, text, score}，这里归一化成卡片要的
+          // {id, title, snippet, score}（见 utils/reference.ts）。
           onReferences: (references: unknown) => {
-            // useSSE may deliver the raw event data; handle both shapes
-            const refs = Array.isArray(references)
-              ? references
-              : (references as any)?.references || [];
+            const refs = normalizeReferences(references);
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === aiMessageId ? { ...m, references: refs } : m,
@@ -374,16 +456,103 @@ export function useChat() {
     setIsStreaming(false);
     // Rotate session ID for a clean server-side conversation
     sessionIdRef.current = generateId();
+    // 持久化新 id：不然刷新后又会恢复回刚被清掉的那段对话
+    persistSessionId(sessionIdRef.current);
+    setSessionId(sessionIdRef.current);
   }, [disconnect]);
+
+  /**
+   * 切换到另一个历史会话。
+   *
+   * 和 `clearChat` 的区别：`clearChat` 是开一段全新的对话（id 轮换），
+   * 这里是把当前会话**指向**一条已有的 session 并把它恢复出来。
+   *
+   * 切换前先断开 SSE：否则上一个会话的 token 会继续往新会话的消息列表里写。
+   */
+  const switchSession = useCallback(
+    async (nextSessionId: string) => {
+      if (nextSessionId === sessionIdRef.current) return;
+
+      // 中止正在进行的生成，并清掉 token 批处理定时器（否则 50ms 后还会补一批进来）
+      disconnect();
+      if (tokenTimerRef.current) {
+        clearTimeout(tokenTimerRef.current);
+        tokenTimerRef.current = null;
+      }
+      tokenBatchRef.current = [];
+
+      setMessages([]);
+      setError(null);
+      setIsStreaming(false);
+
+      sessionIdRef.current = nextSessionId;
+      persistSessionId(nextSessionId);
+      setSessionId(nextSessionId);
+
+      try {
+        const { messages: stored } = await api.getSessionMessages(nextSessionId);
+        const restored = toRestoredMessages(stored, nextSessionId);
+        // 加载期间用户可能已经发了新消息，别拿历史把它覆盖掉
+        setMessages((prev) => (prev.length > 0 ? prev : restored));
+      } catch {
+        /* 拉不到就停在新会话的空态，不影响继续提问 */
+      }
+    },
+    [disconnect],
+  );
+
+  /**
+   * Stop the in-flight assistant generation, keeping whatever has already
+   * been streamed.
+   *
+   * ## Why this exists
+   *
+   * While `isStreaming` is true the send button toggles into a "stop" button.
+   * Stopping is a *soft* abort: we disconnect the SSE stream (which triggers
+   * the backend's `request.is_disconnected()` check so it stops generating),
+   * flush any tokens still sitting in the 50 ms batch buffer, finalise the
+   * placeholder message with its partial content, and release the streaming
+   * lock so the user can immediately send a follow-up.
+   *
+   * Contrast with {@link clearChat}, which also disconnects but additionally
+   * wipes the message list and rotates the session ID.
+   *
+   * @returns `void` — fire-and-forget; the streaming message is finalised
+   *   synchronously and the next `sendMessage` is unblocked.
+   */
+  const stopGenerating = useCallback(() => {
+    // Abort the SSE fetch. The backend's is_disconnected() check notices the
+    // client is gone and stops generating (see llm.py).
+    disconnect();
+    // Flush tokens still buffered so the user keeps the partial answer.
+    if (tokenTimerRef.current) {
+      clearTimeout(tokenTimerRef.current);
+      tokenTimerRef.current = null;
+    }
+    flushTokenBatch();
+    // Finalise the streaming message: keep whatever content arrived, clear the
+    // streaming flag, and mark it as stopped so the bubble can say so instead
+    // of silently looking like a finished (or blank) answer.
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === streamingMsgIdRef.current ? { ...m, isStreaming: false, stopped: true } : m,
+      ),
+    );
+    // Release the send lock.
+    setIsStreaming(false);
+  }, [disconnect, flushTokenBatch]);
 
   return {
     messages,
     isStreaming,
     error,
     connectionState,
+    sessionId,
     sendMessage,
     retryLast,
     clearChat,
+    switchSession,
+    stopGenerating,
     disconnect,
   };
 }

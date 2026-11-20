@@ -42,15 +42,21 @@ export type { TabId };
 export function AppShell({ children, activeTab, onTabChange }: AppShellProps) {
   return (
     <div className={styles.wrapper}>
-      {/* Fixed top bar — app logo / user avatar */}
-      <Header />
-      {/* Scrollable content area; children are swapped by the parent
-          based on the currently active tab. */}
-      <main className={styles.main}>
-        {children}
-      </main>
-      {/* Bottom tab bar for primary navigation between Chat, Growth, Play */}
-      <TabBar activeTab={activeTab} onTabChange={onTabChange} />
+      {/* 左侧竖向导航栏。DOM 里放在内容之前，配合 .wrapper 的 flex-direction: row
+          自然落在左边，不需要额外定位。 */}
+      <div className={styles.navSlot}>
+        <TabBar activeTab={activeTab} onTabChange={onTabChange} />
+      </div>
+
+      <div className={styles.content}>
+        {/* Fixed top bar — app logo / user avatar */}
+        <Header />
+        {/* Scrollable content area; children are swapped by the parent
+            based on the currently active tab. */}
+        <main className={styles.main}>
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

@@ -105,8 +105,10 @@ export function GrowthRecordList({ records, onAdd, onEdit }: GrowthRecordListPro
                 {record.sleepDuration && (
                   <span className={`${styles.tag} ${styles.tagIndigo}`}>😴 {record.sleepDuration}h</span>
                 )}
-                {/* diaper count: explicitly check !== undefined because 0 is a valid value */}
-                {record.diapers !== undefined && (
+                {/* 尿布次数：0 是合法值，所以不能用真值判断；
+                    但后端对未填字段返回的是 **null** 而不是 undefined，
+                    只判 !== undefined 会让空记录渲染出一个没有数字的「🧷 次」。 */}
+                {record.diapers != null && (
                   <span className={`${styles.tag} ${styles.tagAmber}`}>🧷 {record.diapers}次</span>
                 )}
                 {record.feeding && (

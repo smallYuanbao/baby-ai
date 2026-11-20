@@ -23,7 +23,7 @@
 #     The model will load on CPU automatically when no GPU is detected.
 #
 # Prerequisites:
-#   - Python >= 3.9, < 3.13 (constrained by NumPy < 2 and torch compatibility)
+#   - Python >= 3.9
 #   - pip >= 21.0
 #   - (GPU only) CUDA 11.8+ or 12.1+, cuDNN 8+
 #
@@ -33,9 +33,10 @@
 #   pip version are non-critical.
 #
 # Edge cases / notes:
-#   - NumPy is pinned to < 2 because FlagEmbedding and some torch ecosystem
-#     packages are not yet compatible with NumPy 2.x ABI changes.  Removing
-#     this pin may cause import errors or silent numerical mismatches.
+#   - NumPy 2.x is required: FlagEmbedding imports `datasets`, which imports
+#     `pyarrow`; current pyarrow refuses NumPy < 2.0.
+#     The old `numpy<2` pin caused:
+#       ImportError: pyarrow requires NumPy 2.0 or newer, found 1.26.4
 #   - uvicorn[standard] includes websockets and httptools for better
 #     concurrency; omit [standard] if you use gunicorn + uvicorn workers.
 #   - PyTorch wheels in this file come from PyPI (CPU-only by default).  If
@@ -61,8 +62,7 @@ FlagEmbedding
 # default backend for inference.
 torch
 
-# Numerical library — needed by torch and FlagEmbedding.  Pinned below v2 to
-# avoid ABI incompatibility with the installed torch / FlagEmbedding versions.
-# Remove or relax this pin only after verifying all dependencies support
-# NumPy 2.x.
-numpy<2
+# Numerical library — needed by torch and FlagEmbedding。
+# pyarrow / datasets 要求 NumPy >= 2.0；现代 torch / FlagEmbedding 已支持 2.x。
+# 不要再 pin <2，否则 FlagEmbedding 导入 datasets 时会直接失败。
+numpy>=2,<3

@@ -1,29 +1,39 @@
 /**
  * AppShell — top-level layout shell for the application.
  *
- * Provides a mobile-first, vertically-stacked container that constrains the
- * full viewport.  The narrow max-width (42rem) keeps content focused and
- * readable on wider screens, while 100dvh ensures correct sizing even when
- * mobile browser toolbars appear or disappear.
+ * **桌面专用**：本应用不做移动端适配（见 README「桌面端」说明）。
+ * 左侧竖向导航栏 + 右侧内容列（Header + main），铺满整个视口。
+ *
+ * 历史：这里原本是「移动优先」的写法 —— 窄屏时导航在底部、内容限制在
+ * 42rem 居中，≥1024px 才切成侧栏。决定只支持桌面后，桌面那套直接变成
+ * 无条件规则，窄屏分支和 order 换位都删掉了。
  */
 
 @import '../../styles/variables.less';
 
 // ── Root wrapper ────────────────────────────────────────────────────────────
-// Full-viewport column that centers a constrained-width card on desktop.
+// 横向两栏：左导航 + 右内容。铺满视口，不留居中留白。
 
 .wrapper {
   display: flex;
-  flex-direction: column;
-  height: 100dvh;              // dsvh avoids iOS Safari toolbar jank
-  max-width: 42rem;            // keeps chat / content line-length comfortable
-  margin: 0 auto;              // center on viewports wider than 42rem
+  flex-direction: row;
+  height: 100dvh;              // dvh 在桌面等价于 vh，保留以免将来又要在意浏览器工具栏
   background: @white;
-  box-shadow: @shadow-sm;      // subtle separation from the body background
 }
 
-// ── Main content area ───────────────────────────────────────────────────────
-// Flex child that fills remaining vertical space and scrolls independently.
+// 导航槽：宽度由 TabBar 的 .nav 决定（8.5rem），这里只负责不参与收缩
+.navSlot {
+  flex-shrink: 0;
+}
+
+// 内容列：Header + main，竖向堆叠，占据剩余宽度
+.content {
+  flex: 1;
+  min-width: 0;                // 允许在 flex row 内收缩，否则长内容会把侧栏挤出去
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
 
 .main {
   flex: 1;                     // consume all space not taken by header/footer

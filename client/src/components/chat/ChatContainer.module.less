@@ -17,8 +17,17 @@
 .wrapper {
   flex: 1;               // absorb all leftover space inside the parent flex container
   display: flex;
-  flex-direction: column;
+  flex-direction: row;   // 横排成「聊天区 + 引用面板」两栏（外层侧栏由 AppShell 提供，合起来是三栏）
   overflow: hidden;      // clip child content; individual children handle their own scrolling
+}
+
+// 聊天区:竖向堆叠(工具栏/消息/输入),自己占满剩余宽度
+.chatColumn {
+  flex: 1;
+  min-width: 0;          // 允许在 flex 行内收缩,否则长内容会把面板挤出去
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 // ---------------------------------------------------------------------------
@@ -56,9 +65,10 @@
 }
 
 // ---------------------------------------------------------------------------
-// Clear icon — small inline SVG/icon next to the "Clear" label.
+// Toolbar actions — 「历史会话」「语音设置」「新对话」并排放在右侧
 // ---------------------------------------------------------------------------
-.clearIcon {
-  width: 0.875rem;       // ≈14px at default root font-size; matches the small label
-  height: 0.875rem;
+.toolbarActions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }

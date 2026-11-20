@@ -8,6 +8,18 @@
 // =============================================================================
 
 // ---------------------------------------------------------------------------
+// 桌面阅读列 —— 和 RiddleGame 是同一套做法(那边有完整说明)
+// ---------------------------------------------------------------------------
+// 这一屏原本没有宽度上限:1440px 下七个年龄按钮各被拉到 ~190px、
+// 「生成故事」是一条横贯全屏的长条。收进 48rem 的单列阅读宽度。
+@content-max: 48rem;
+
+// 居中留白用内边距做,不给滚动容器加 max-width ——
+// 否则 storyContent 的滚动条会跑到屏幕中间。
+// ⚠️ 别改写成 clamp():Less 4.6.6 会把里面的 `100% - 48rem` 求值成 `52%`。
+@content-gutter: max(1.5rem, calc((100% - @content-max) / 2));
+
+// ---------------------------------------------------------------------------
 // Root wrapper — fills available space and constrains layout vertically.
 // ---------------------------------------------------------------------------
 .wrapper {
@@ -23,29 +35,55 @@
 
 .topBar {
   flex-shrink: 0; // Keep the bar visible; do not let the story area compress it.
-  display: flex;
+  // 1fr auto 1fr:左右两列等宽,标题才是真居中(flex + flex:1 的做法会因为
+  // 返回按钮变宽而把标题挤偏)。
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  padding: 0.75rem 1rem;
+  gap: @space-4;
+  // 与 .setupPanel / .storyContent 同一份居中留白 → 导航栏和内容列左右对齐
+  padding: 0.75rem @content-gutter;
 }
 
+// 返回按钮 —— 原来是裸文字(0.875rem / @gray-500),白底上太弱。
+// 改成有填充、描边和最小点击高度的胶囊按钮,静止状态就能被认出是控件。
 .backButton {
-  font-size: 0.875rem;
-  color: @gray-500;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.25rem;              // 36px 最小点击高度
+  padding: 0 @space-4;
+  font-size: @text-sm;
+  font-weight: 600;
+  color: @gray-700;                 // 白底上 ≈10:1
+  background: @white;
+  border: 1px solid @gray-300;
+  border-radius: @radius-full;
+  transition: color @transition-base, background-color @transition-base,
+              border-color @transition-base;
 
   &:hover {
-    color: @gray-700;
+    color: @primary-700;
+    background: @primary-50;
+    border-color: @primary-300;
+  }
+
+  &:active {
+    background: @primary-100;
   }
 }
 
+// 标题落在网格中列,两侧 1fr 等宽 → 自带居中,不需要 flex: 1。
 .screenTitle {
-  flex: 1;
   text-align: center;
   font-weight: 600;
   color: @gray-800;
 }
 
-// Balances the back button width so the title stays visually centered.
+// 网格第三列已经是等宽的 1fr,标题居中不再依赖这个占位元素。
+// 保留是因为它还在 JSX 里(RiddleGame 那一格放的是分数),这里只是让它别出怪相。
 .spacer {
+  justify-self: end;
   width: 3rem;
 }
 
@@ -55,10 +93,10 @@
 
 .setupPanel {
   flex-shrink: 0; // Keep the controls visible; the story area scrolls instead.
-  padding: 0 1rem 0.75rem 1rem;
+  padding: 0 @content-gutter 0.75rem;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: @space-5;
 }
 
 // Small-cap label above a row of option buttons (e.g. "Age range").
@@ -77,11 +115,14 @@
 // Shared pill-button styles for age and story-type selectors.
 .optionButton {
   flex: 1;
-  padding: 0.5rem 0;
-  border-radius: 1rem;
-  font-size: 0.875rem;
+  padding: @space-2 0;
+  border-radius: @radius-xl;
+  font-size: @text-sm;
   font-weight: 500;
-  transition: all 200ms;
+  // 透明边框在这里统一声明:故事类型那行本来就带 2px 边框,年龄那行不带,
+  // 两行按钮高度因此差 4px。补成一致后两行才对齐。
+  border: 2px solid transparent;
+  transition: all @transition-base;
 
   // ---- Age selector states ----
 
@@ -90,12 +131,17 @@
     color: @white;
   }
 
+  // 未选中底色原来是 @gray-50(#f9fafb),对纯白只有 1.045:1 —— 基本看不见。
+  // 换 @surface-sunken(#efe9e0,1.207:1);文字从 @gray-500 提到 @gray-600
+  // (@gray-500 在新底色上只有 4.37:1,跌破 4.5 的 AA 线;@gray-600 是 6.28:1)。
+  // 详细理由见 RiddleGame.module.less 里的同一段注释。
   &.inactiveOption {
-    background: @gray-50;
-    color: @gray-500;
+    background: @surface-sunken;
+    color: @gray-600;
 
     &:hover {
-      background: @gray-100;
+      background: @primary-50;
+      color: @primary-700;
     }
   }
 
@@ -108,9 +154,14 @@
   }
 
   &.inactiveType {
-    background: @gray-50;
-    color: @gray-500;
+    background: @surface-sunken;
+    color: @gray-600;
     border: 2px solid transparent; // Keeps layout stable when switching between active/inactive.
+
+    &:hover {
+      background: @primary-50;
+      color: @primary-700;
+    }
   }
 }
 
@@ -137,7 +188,7 @@
 .storyContent {
   flex: 1;
   overflow-y: auto;
-  padding: 0.75rem 1rem;
+  padding: 0.75rem @content-gutter 1.5rem;
 }
 
 // Card that wraps the generated story text.
@@ -148,12 +199,20 @@
   border: 1px solid @primary-100;
 }
 
-// Action buttons below the story (e.g. "Read aloud", "New story").
+// Action buttons below the story ("再讲一个" / "换一个主题").
+// 桌面下并排:两个按钮竖着堆在 48rem 的列里,又会各自变成一条大长条 ——
+// 和这一屏要修的"被拉满"是同一类毛病。
 .storyActions {
-  margin-top: 1rem;
+  margin-top: @space-4;
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  gap: @space-2;
+
+  // 这两个按钮身上带的是共享 Button 传进来的 .fullWidth(width: 100%)。
+  // 横向 flex 里不用去覆盖它:`flex: 1` 会把 flex-basis 定成 0%,
+  // 而 flex-basis 不是 auto 时,主尺寸由 flex 决定、width 根本不参与计算。
+  > * {
+    flex: 1;
+  }
 }
 
 // Utility: makes a button fill the full width of the story card.

@@ -1,12 +1,12 @@
 /**
- * TabBar — Bottom tab navigation bar for the baby-ai mobile app.
+ * TabBar — 左侧竖向主导航栏（桌面专用）。
  *
- * Renders a horizontal row of tab buttons (Chat / Growth / Play) anchored at
- * the bottom of the viewport. Each tab button displays an emoji icon and a
- * Chinese label. The component is stateless on its own — the currently active
- * tab and the change handler are lifted to the parent.
+ * Renders a column of tab buttons (Chat / Growth / Play) pinned to the left of
+ * the shell. Each tab button displays an emoji icon and a Chinese label. The
+ * component is stateless on its own — the currently active tab and the change
+ * handler are lifted to the parent.
  *
- * @file   Bottom navigation tabs for the main app shell.
+ * @file   Side navigation tabs for the main app shell.
  * @role   Primary navigation between the three core sections of the app.
  * @state  None — fully controlled via `activeTab` prop.
  */
@@ -51,9 +51,8 @@ interface TabBarProps {
  */
 export function TabBar({ activeTab, onTabChange }: TabBarProps) {
   return (
-    // The `safe-area-bottom` utility class ensures the bar clears the iOS
-    // home indicator and other device-specific bottom safe areas.
-    <nav className={`${styles.nav} safe-area-bottom`}>
+    // 不再需要 safe-area-bottom 之类的 iOS 底部安全区补偿 —— 只支持桌面。
+    <nav className={styles.nav}>
       {TABS.map((tab) => {
         // Determine whether this tab is the currently active one.
         const isActive = activeTab === tab.id;

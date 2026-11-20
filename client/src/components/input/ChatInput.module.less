@@ -37,13 +37,50 @@
 }
 
 // ---------------------------------------------------------------------------
+// Upload Error
+// ---------------------------------------------------------------------------
+// 上传失败的提示条。
+//
+// 它存在的唯一理由：以前选了一个后端不支持的格式，界面表现是「缩略图闪一下没了，
+// 什么都不说」—— 用户完全无从判断是网络问题、文件问题还是自己点错了。
+.uploadError {
+  display: flex;
+  align-items: flex-start;
+  gap: @space-2;
+  margin-bottom: @space-2;
+  padding: @space-2 @space-3;
+  // 用红色系提醒"这次没成功"，但和错误气泡（bubble）不同：这里不是对话内容，
+  // 是一条系统提示，所以底色更淡、无边框，不抢对话框的视觉层级。
+  background: @red-50;
+  color: @red-700;              // @red-700 在 @red-50 上过 AA（见 variables.less 的说明）
+  font-size: @text-xs;
+  border-radius: @radius-xl;
+  line-height: 1.5;
+}
+
+.uploadErrorClose {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0 @space-1;
+  color: @red-700;
+  opacity: 0.7;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Input Area (horizontal row: buttons + textarea)
 // ---------------------------------------------------------------------------
 
 .inputArea {
   display: flex;
-  // Align items to the bottom so buttons sit at the same baseline as the
-  // textarea, even when the textarea grows taller (multi-line)
+  // 底部对齐：textarea 长到多行时，三个按钮保持贴着底边（单行时它们高度相同，
+  // 效果等同于垂直居中）。
+  //
+  // 这里依赖「各子项底边严格对齐」，所以**不要**再给某个按钮单独加 margin-bottom
+  // 做"视觉微调" —— 发送按钮没加、上传/语音加了 2px，结果就是发送按钮明显偏低。
   align-items: flex-end;
   gap: @space-2;
 }
@@ -52,15 +89,9 @@
 // Action Buttons (attach, mic) — left of the textarea
 // ---------------------------------------------------------------------------
 
-.attachButton {
-  // Optical alignment: nudge the button slightly above the textarea baseline
-  // so it appears visually centered within the row
-  margin-bottom: @space-0d5;
-}
-
-.micButton {
-  margin-bottom: @space-0d5;
-}
+// .attachButton / .micButton 两个包裹层不需要任何样式：它们里面的按钮是
+// 块级 flex 容器，本身没有基线间隙；对齐完全交给 .inputArea 的 align-items。
+// （原先这里各有一条 margin-bottom 做「视觉微调」，正是它让发送按钮显得偏低。）
 
 // ---------------------------------------------------------------------------
 // Textarea
@@ -69,6 +100,11 @@
 .textareaWrapper {
   flex: 1;
   position: relative;
+  // textarea 默认是 inline-block，放在块级父元素里会产生「基线间隙」，
+  // 包裹层因此比 textarea 本身高出几个像素（实测 52px vs 44px）。
+  // flex 布局下这个间隙消失，包裹层高度 == textarea 高度，
+  // .inputArea 的 flex-end 才是拿真正的文本框底边在跟按钮对齐。
+  display: flex;
 }
 
 .textarea {
@@ -85,7 +121,7 @@
   transition: all @transition-base;
 
   &::placeholder {
-    color: @gray-350;
+    color: @gray-400;
   }
 
   &:focus {
@@ -159,13 +195,50 @@
 }
 
 // ---------------------------------------------------------------------------
+// Stop Button — replaces the send button while a response is streaming
+// ---------------------------------------------------------------------------
+
+.stopButton {
+  // Same footprint as .sendButton so the input row layout doesn't shift
+  // when the button toggles between send / stop.
+  flex-shrink: 0;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: @radius-2xl;
+  background: @red-600;
+  color: @white;
+  transition: all @transition-base;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: @shadow-sm;
+  min-width: 44px;
+  min-height: 44px;
+
+  &:hover {
+    // No @red-600 token exists, so darken via filter instead of a new variable.
+    filter: brightness(0.9);
+  }
+
+  &:active {
+    filter: brightness(0.8);
+    transform: scale(0.95);
+  }
+}
+
+.stopIcon {
+  width: @space-4;
+  height: @space-4;
+}
+
+// ---------------------------------------------------------------------------
 // Hint / Disclaimer
 // ---------------------------------------------------------------------------
 
 .hint {
   font-size: @text-xs;
   // Muted color so the hint reads as secondary / disclaimer info
-  color: @gray-300;
+  color: @gray-400;
   text-align: center;
   margin-top: @space-2;
 }

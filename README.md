@@ -16,11 +16,13 @@
 | 层级 | 技术 |
 |---|---|
 | 前端 | React 18 + TypeScript + Vite + Less（\*.module.less） |
-| 后端 | Express.js + TypeScript |
+| 后端 (Node) | Express.js + TypeScript |
+| 后端 (Python) | FastAPI + Python 3.12 |
 | AI | DeepSeek API（流式 SSE） |
+| Agent | ReAct 循环 + MCP 工具调用 |
 | 嵌入 | Ollama + bge-m3 |
 | 向量库 | ChromaDB |
-| RAG管道 | 查询改写 → 向量检索 → 重排序 → 生成 |
+| RAG管道 | 查询改写 → 意图路由 → 混合检索(Dense+Sparse) → 重排序 → 生成 |
 
 ## 功能特性
 
@@ -31,6 +33,54 @@
 - 🛡️ **降级策略**：检索不足时自动降级为通用回答
 - 📁 **文件上传**：支持 PDF、TXT、图片上传
 - 🎨 **儿童友好UI**：暖橙配色、大圆角、可爱小熊形象
+
+## 🐍 Python 后端（推荐）
+
+Python 版是 Express 版的完整重构，增加了意图路由、混合检索(RRF + 线性加权)、精排降级、Agent 工具调用、MCP 协议支持，并提供评估和基准测试工具链。
+
+### 快速开始
+
+```bash
+cd python-server
+source .venv/bin/activate
+uvicorn app.main:app --reload --port 8010
+```
+
+详见 [python-server/README.md](python-server/README.md)
+
+### 新增功能（vs Express 版）
+
+| 功能 | 说明 |
+|------|------|
+| 🧭 意图路由 | keyword + LLM 双层分诊，7 类意图自动识别 |
+| 🔀 混合检索 | RRF 排名融合 + 线性加权，Dense(语义) + Sparse(关键词) |
+| 🎯 精排降级 | BGE Reranker → DeepSeek → 距离兜底，三级容错 |
+| 🤖 Agent | ReAct 决策循环 + function calling 工具调用 |
+| 🔌 MCP | Model Context Protocol 客户端，连接远程工具服务 |
+| 📊 评估工具 | LLM-as-Judge 打分 + faithfulness/relevancy/recall 三维度 |
+| ⚡ 基准测试 | ANN vs 暴力搜索对比、维度对比实验 |
+| 📁 文件上传 | PDF/TXT 解析 → 语义分块 → 向量化入库 |
+
+### Agent 端点
+
+| 端点 | 说明 |
+|------|------|
+| `POST /api/agent/chat` | 单次工具调用 |
+| `POST /api/agent/react` | ReAct 多轮循环 |
+| `POST /api/agent/reflect` | ReAct + 反思审查 |
+| `POST /api/agent/mcp` | MCP 协议工具调用 |
+
+### 🔌 MCP Server（工具调用示例）
+
+```bash
+cd mcp-server
+source venv/bin/activate
+python weather_server.py
+```
+
+MCP 客户端启动时自动发现 `get_weather` 工具（真实 wttr.in API），LLM 按需调用。
+
+---
 
 ## 快速开始
 
@@ -81,8 +131,8 @@ source venv/bin/activate
 # 安装依赖
 pip install -r requirements.txt
 
-# 启动服务（端口 8001）
-uvicorn server:app --host 0.0.0.0 --port 8001
+# 启动服务（端口 8011）
+uvicorn server:app --host 0.0.0.0 --port 8011
 ```
 
 > 使用 BAAI/bge-reranker-v2-m3 模型，提供 `/rerank` 和 `/health` 接口。
@@ -168,13 +218,52 @@ searchCollections: ['rag_samples', 'rag_medical'],  // 并行搜索这两个集�
 ### 7. 启动开发环境
 
 ```bash
-# 同时启动前后端
 npm run dev
-
-# 或分别启动
-npm run dev:server   # 后端 http://localhost:3001
-npm run dev:client   # 前端 http://localhost:5173
 ```
+
+一条命令起两个进程（`concurrently` 并行跑，用前缀区分输出）：
+
+```
+[api] INFO:     Uvicorn running on http://127.0.0.1:8010
+[web]   VITE v5.4.21  ready in 291 ms
+```
+
+启动前会**先跑一遍环境自检** `scripts/devguard.mjs`（Node 版本 / 端口占用 / 后端身份）。
+自检不通过就直接退出，不会让你带着一个错的环境去调业务代码。
+
+**也可以分开起：**
+
+```bash
+npm run dev:api      # 只起后端（FastAPI，8010）
+npm run dev:client   # 只起前端（Vite，5180）
+```
+
+> `dev:api` 直接用 `python-server/.venv/bin/python`，不需要先 `source activate`。
+> 这个路径是 Unix 写法，Windows 上要换成 `.venv/Scripts/python.exe`。
+
+**端口分配**（全机唯一一份，改端口前先看 `scripts/devguard.mjs` 顶部的表）：
+
+| 服务 | 端口 |
+|------|:---:|
+| 前端 (Vite) | 5180 |
+| 后端 (FastAPI) | 8010 |
+| 精排 (BGE reranker) | 8011 |
+| ChromaDB | 8000 |
+| ecom-agent 前端 | 5190 |
+| ecom-agent 后端 | 8090 |
+| ecom-agent 评测 | 8091 |
+
+> ⚠️ **`npm run dev:legacy-server` 是老版 Express + TypeScript 后端**（端口 **8020**），
+> 不承担业务流量，保留只为对照阅读。日常开发不需要它。
+> 名字里的 `legacy` 是刻意的：它和上面的 `dev:api`（FastAPI，8010，就是本 README 描述的那个后端）
+> 只差一个词，一眼容易看错。**日常开发不要用它。**
+>
+> 端口被占用时 **Vite 会直接报错退出**（配置里开了 `strictPort`），
+> 不会像以前那样默默顺延到 5181、5182 —— 那种顺延正是
+> 「我打开 localhost:5180，看到的却是别的项目」的来源。
+>
+> 遇到任何"接口 404 / 连不上"的怪象，**先跑 `npm run doctor`**：
+> 它会告诉你每个端口上坐的是谁，以及是不是你要的那个服务。
 
 ## API 文档
 
@@ -184,14 +273,14 @@ npm run dev:client   # 前端 http://localhost:5173
 
 **流式请求**（默认）：
 ```bash
-curl -X POST http://localhost:3001/api/chat?stream=true \
+curl -X POST http://localhost:8010/api/chat?stream=true \
   -H "Content-Type: application/json" \
   -d '{"message": "宝宝发烧怎么办？"}'
 ```
 
 **非流式请求**：
 ```bash
-curl -X POST http://localhost:3001/api/chat?stream=false \
+curl -X POST http://localhost:8010/api/chat?stream=false \
   -H "Content-Type: application/json" \
   -d '{"message": "宝宝发烧怎么办？"}'
 ```
@@ -200,7 +289,7 @@ curl -X POST http://localhost:3001/api/chat?stream=false \
 
 文件上传接口：
 ```bash
-curl -X POST http://localhost:3001/api/upload \
+curl -X POST http://localhost:8010/api/upload \
   -F "file=@宝宝体检报告.pdf"
 ```
 
@@ -208,7 +297,7 @@ curl -X POST http://localhost:3001/api/upload \
 
 健康检查：
 ```bash
-curl http://localhost:3001/api/health
+curl http://localhost:8010/api/health
 ```
 
 ## RAG 管道流程
@@ -297,14 +386,14 @@ DeepSeek LLM 精排（备选）
 │                       🖥️  用户浏览器                               │
 │                                                                  │
 │   React 18 · TypeScript · Vite · Less（\*.module.less）· SSE 流式接收 │
-│   http://localhost:5173                                          │
+│   http://localhost:5180                                          │
 └──────────────────────────────┬───────────────────────────────────┘
                                │
                                │  HTTP / SSE
                                │
                                ▼
 ╔══════════════════════════════════════════════════════════════════╗
-║                  🧠 Baby AI Server  (:3001)                       ║
+║                  🧠 Baby AI Server  (:8020)                       ║
 ║                  Express.js + TypeScript                          ║
 ╠══════════════════════════════════════════════════════════════════╣
 ║                                                                    ║
@@ -341,7 +430,7 @@ DeepSeek LLM 精排（备选）
                ▼              ▼
 ╔══════════════════╗  ╔══════════════════════╗
 ║  🐍 Reranker     ║  ║  🗄️ ChromaDB         ║
-║  (:8001)         ║  ║  (:8000)             ║
+║  (:8011)         ║  ║  (:8000)             ║
 ║                  ║  ║                      ║
 ║  FastAPI         ║  ║  Docker 容器           ║
 ║  BAAI/bge-       ║  ║                      ║
@@ -402,8 +491,19 @@ baby-ai/
 │       ├── middleware/     # Express 中间件
 │       ├── types/         # TypeScript 类型
 │       └── utils/         # 工具函数
-├── reranker/              # BGE 重排序服务
-├── knowledge_base/        # 知识库文档（用户自行导入，仓库不含原始数据，仅含灌库脚本）
+├── python-server/         # Python 后端服务（FastAPI）
+│   ├── app/
+│   │   ├── services/
+│   │   │   ├── rag/       # 检索系统（embedding + retriever + reranker）
+│   │   │   ├── agent/     # Agent 逻辑（base + unified + reflection + mcp）
+│   │   │   ├── pipeline/  # 预处理管线（rewrite + intent + session + chat）
+│   │   │   └── upload/    # 文件上传
+│   │   ├── skills/        # Agent 技能（search + review + weather）
+│   │   └── models/        # Pydantic 模型
+│   └── scripts/           # 评估、灌库、基准测试脚本
+├── reranker/              # BGE 重排序服务（独立部署）
+├── mcp-server/            # MCP 天气服务（Agent 工具调用示例）
+├── knowledge_base/        # 知识库文档
 ├── docker-compose.yml     # ChromaDB + Ollama
 └── .env.example           # 环境变量模板
 ```
@@ -443,15 +543,29 @@ baby-ai/
       → done 后: <ReactMarkdown> ✅ 只解析一次
 ```
 
+## 踩坑记录
+
+开发过程中踩过的坑，按「现象 → 根因 → 修法 → 原理」记，附实测数据与 git 溯源：
+
+| 分类 | 内容 |
+|------|------|
+| [推理模型与输出预算](docs/pitfalls/reasoning-model-budget.md) | 改常量时改错变量致流式全挂；三处小 `max_tokens` 静默失效；预算该按什么定 |
+| [异步接口里的阻塞与取消](docs/pitfalls/async-blocking.md) | `async def` 里跑同步代码堵死全服务 38 秒；“停止生成”停不掉检索 |
+| [前后端数据契约](docs/pitfalls/data-contract.md) | 引用字段两端从未对齐；精排降级后分数恒为 1.0 |
+| [性能瓶颈与环境配置](docs/pitfalls/perf-and-env.md) | 一轮对话 54 秒、瓶颈在精排；Node 14 下 npm 递归派生 301 个进程 |
+
+→ [总览与速查](docs/pitfalls/index.md)
+
 ## 待实现功能
 
-| 功能 | 优先级 | 说明 |
+| 功能 | 状态 | 说明 |
 |------|------|------|
-| **权威指南提炼** | 🔴 高 | 下载 AAP / 中华医学会儿科分会公开指南 PDF → 拆段 → DeepSeek 提炼 Q&A → 灌库。详见「灌入知识库 → 途径 3」 |
-| **用户认证系统** | 🔴 高 | 目前无登录/注册机制，所有用户共用同一会话空间。后续计划引入 JWT/Session 认证，实现多用户数据隔离 |
-| **对话持久化存储** | 🔴 高 | 对话历史当前仅存于服务端内存（`Map<sessionId, Message[]>`），服务重启后全部丢失。计划接入 SQLite 或 PostgreSQL 做会话持久化 |
-| **跨会话记忆** | 🔴 高 | 目前 AI 只在单次会话内有上下文记忆，换个会话就"失忆"。计划实现：会话结束后提取关键信息（宝宝月龄、过敏史、关注主题等）→ 灌入长期记忆库 → 新会话时检索注入，让 AI 跨多天对话也能记住用户说过的话 |
-| **自动化测试** | 🟡 中 | 目前项目尚未覆盖单元测试和集成测试。计划引入 Vitest（前端）+ Jest/Supertest（后端），覆盖 RAG 管道核心链路 |
+| **权威指南提炼** | 🔴 待做 | 下载 AAP / 中华医学会儿科分会公开指南 PDF → 拆段 → DeepSeek 提炼 Q&A → 灌库。详见「灌入知识库 → 途径 3」 |
+| **用户认证系统** | 🟡 部分 | 方案 A 已打通「应用层鉴权 + 多租户隔离」（API Key → user_id，全查询 `WHERE user_id=?` 过滤，见 `app/core/auth.py`）；完整的登录/注册 + JWT 签发刷新待补 |
+| **对话持久化存储** | ✅ 已实现 | 会话历史已落盘 SQLite（`data/sessions.db`），服务重启不丢，按 `user_id + session_id` 隔离，保留最近 10 轮 |
+| **跨会话记忆** | 🟡 部分 | `user_profile.py` 的提取 / 保存 / 读取都写好了，但**只接在 `/api/agent/unified` 上**，而前端不调该端点 —— 主聊天链路（`/api/chat/stream`）并没有注入。详见 [docs/todo.md](docs/todo.md) 第 1 条 |
+| **聊天与成长数据联动** | 🔴 待做 | 让 AI 知道用户录入的宝宝月龄 / 身高体重。聊天链路目前完全没有这些数据（`profile_text` 参数已就位但没传）。方案与三条边界见 [docs/todo.md](docs/todo.md) 第 1 条 |
+| **自动化测试** | 🟡 部分 | 后端 pytest 已覆盖 62 例（growth/play/cache/熔断/session 持久化/流式预算与取消等）；前端 Vitest 待补 |
 | **移动端适配** | 🟡 中 | 前端当前以桌面端为主，移动端仅在 `index.html` 设置了 viewport，部分组件在窄屏下体验待优化 |
 | **多语言支持** | 🟢 低 | 目前仅支持中文，包括 UI 文案和 AI 回复。后续可通过 i18n 扩展英文等多语言 |
 

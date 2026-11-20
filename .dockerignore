@@ -1,0 +1,28 @@
+# Docker 构建上下文排除项（作用于仓库根为 context 的前端构建）
+.git
+.gitignore
+.env
+.env.*
+**/node_modules
+client/dist
+client/node_modules
+server/node_modules
+
+# 前端构建用不到的后端/精排/旧服务代码（各自有独立构建 context）
+python-server
+reranker
+mcp-server
+server/data
+server/scripts
+server/dist
+
+# 运行期数据/日志，不进镜像
+**/__pycache__
+
+# 文档与本地文件
+docs
+*.md
+*.pdf
+logs
+uploads
+data

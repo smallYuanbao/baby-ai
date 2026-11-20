@@ -124,6 +124,15 @@
   color: @gray-400;
 }
 
+// 后端判断"与育儿无关"时的提示。
+// 用 @primary-700 而不是红色：这**不是错误** —— 上传成功了，只是提醒用户别抱错期待。
+// 红色会让人以为文件传坏了。用暖橙的深色档，和整套配色的"注意"语义一致。
+.unrelated {
+  color: @primary-700;
+  line-height: 1.35;      // 文案比"已就绪"长，允许折行
+  text-align: left;
+}
+
 // ------------------------------------------------------------------
 // Remove Button
 // ------------------------------------------------------------------
@@ -144,7 +153,7 @@
   // On hover, turn red to warn the user this is a destructive action.
   // The red-50 background creates a subtle red glow around the button.
   &:hover {
-    color: @red-500;
+    color: @red-700;
     background: @red-50;
   }
 }

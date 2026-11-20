@@ -25,8 +25,14 @@ interface MessageListProps {
   messages: Message[];
   /** Called when the user taps a suggestion pill inside the empty state. */
   onSuggestionClick: (text: string) => void;
-  /** Optional callback to read a message aloud via TTS. */
-  onReadAloud?: (text: string) => void;
+  /** Optional callback to read a message aloud via TTS（传入消息 id 和正文）。 */
+  onReadAloud?: (messageId: string, text: string) => void;
+  /** 正在朗读的消息 id；该消息的按钮显示为「停止」。 */
+  speakingMessageId?: string | null;
+  /** 右侧引用面板当前展示的是哪条助手消息的引用。 */
+  selectedReferencesId?: string | null;
+  /** 点击某条消息上的「引用 N 条」时调用，把面板切到那一轮。 */
+  onShowReferences?: (messageId: string) => void;
 }
 
 /**
@@ -40,7 +46,14 @@ interface MessageListProps {
  * @param props - See {@link MessageListProps}.
  * @returns A React element wrapping either an empty state or the message history.
  */
-export function MessageList({ messages, onSuggestionClick, onReadAloud }: MessageListProps) {
+export function MessageList({
+  messages,
+  onSuggestionClick,
+  onReadAloud,
+  speakingMessageId,
+  selectedReferencesId,
+  onShowReferences,
+}: MessageListProps) {
   // Auto-scroll behaviour: the hook re-scrolls whenever `messages` changes.
   const { containerRef, showScrollButton, scrollToBottom, handleScroll } =
     useScrollToBottom([messages]);
@@ -72,6 +85,9 @@ export function MessageList({ messages, onSuggestionClick, onReadAloud }: Messag
             message={msg}
             isLast={index === messages.length - 1}
             onReadAloud={onReadAloud}
+            isReading={speakingMessageId === msg.id}
+            isReferencesTarget={selectedReferencesId === msg.id}
+            onShowReferences={onShowReferences}
           />
         ))}
         {/* 底部留白 — extra spacing below the last message so it is not

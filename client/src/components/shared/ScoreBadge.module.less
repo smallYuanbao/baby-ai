@@ -14,6 +14,10 @@
 .badge {
   display: inline-flex;             /* sit inline with text but use flex for internal layout */
   align-items: center;              /* vertically centre dot, value, and percent suffix */
+  /* 徽章挨着长标题时会被 flex 压缩：不设这两条，「高相关 95%」会被挤成
+     一个字一行的竖排。徽章是固定内容的胶囊，不需要参与收缩。 */
+  flex-shrink: 0;
+  white-space: nowrap;
   gap: @space-1;                     /* spacing between dot, value, and percent suffix */
   padding: @space-0d5 @space-2;     /* compact vertical, relaxed horizontal */
   border-radius: @radius-full;      /* 胶囊形 */

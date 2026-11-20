@@ -18,7 +18,7 @@
   margin: 0 @space-4 @space-3;
   padding: @space-3;
   background: @red-50;
-  border: 1px solid #fecaca; // red-200 equivalent
+  border: 1px solid @red-200; // red-200 equivalent
   border-radius: @radius-2xl;
   display: flex;
   align-items: center;
@@ -41,7 +41,7 @@
 .message {
   flex: 1; // fill remaining horizontal space so buttons stay at the end
   font-size: @text-sm;
-  color: #b91c1c; // red-700 — high-contrast on the red-50 background
+  color: @red-700; // red-700 — high-contrast on the red-50 background
 }
 
 /* ------------------------------------------------------------------ */
@@ -63,13 +63,13 @@
   padding: @space-1 @space-3;
   font-size: @text-xs;
   font-weight: 600;
-  color: #b91c1c; // red-700
+  color: @red-700; // red-700
   background: #fee2e2; // red-100
   border-radius: @radius-xl;
   transition: color, background-color, border-color @transition-base;
 
   &:hover {
-    background: #fecaca; // red-200 — slightly darker on hover
+    background: @red-200; // red-200 — slightly darker on hover
   }
 }
 

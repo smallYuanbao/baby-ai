@@ -21,6 +21,14 @@ interface FilePreviewProps {
   uploading: boolean;
   /** Callback invoked when the user clicks the remove (✕) button. */
   onRemove: () => void;
+  /**
+   * 后端在上传时给出的归类：是否与育儿相关。
+   * 三态 —— `true` 相关 / `false` 无关 / `null` 或 `undefined` 没判出来。
+   * **只有明确的 `false` 才提示**：把未知当否定会让正常的育儿资料被无故警告。
+   */
+  parentingRelated?: boolean | null;
+  /** 一句话文件摘要，用于提示的 title（悬停能看到后端读到了什么）。 */
+  summary?: string | null;
 }
 
 /**
@@ -30,7 +38,14 @@ interface FilePreviewProps {
  * shown in place of the thumbnail. The status line reflects whether the file is still uploading
  * or is ready to send.
  */
-export function FilePreview({ fileName, preview, uploading, onRemove }: FilePreviewProps) {
+export function FilePreview({
+  fileName,
+  preview,
+  uploading,
+  onRemove,
+  parentingRelated,
+  summary,
+}: FilePreviewProps) {
   return (
     // animate-fade-in is a global utility class for the entry transition; wrapper uses CSS modules for scoped styles
     <div className={`animate-fade-in ${styles.wrapper}`}>
@@ -56,6 +71,18 @@ export function FilePreview({ fileName, preview, uploading, onRemove }: FilePrev
         {/* Conditional status: show "uploading" text while the file is being transferred, "ready" once complete */}
         {uploading ? (
           <p className={`${styles.fileStatus} ${styles.uploading}`}>上传中...</p>
+        ) : parentingRelated === false ? (
+          /*
+            上传完就提示，而不是等用户打完字、发出去、被拒答之后才知道。
+            **只提示、不拦截**：文件本身可能和育儿无关，但用户想问的恰恰是育儿问题
+            （例如一份保险合同 + 「这个能报宝宝住院吗」）。拦掉就把这种情况也误伤了。
+          */
+          <p
+            className={`${styles.fileStatus} ${styles.unrelated}`}
+            title={summary ? `后端读到：${summary}` : undefined}
+          >
+            ⚠️ 看起来与育儿无关，可能帮不上忙
+          </p>
         ) : (
           <p className={`${styles.fileStatus} ${styles.ready}`}>已就绪</p>
         )}

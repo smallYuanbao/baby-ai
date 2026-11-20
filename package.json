@@ -8,9 +8,11 @@
     "server"
   ],
   "scripts": {
+    "doctor": "node scripts/devguard.mjs --report",
+    "dev": "node scripts/devguard.mjs && concurrently -n api,web -c blue,green \"npm run dev:api\" \"npm run dev:client\"",
+    "dev:api": "cd python-server && .venv/bin/python -m uvicorn app.main:app --reload --port 8010",
     "dev:client": "npm run dev -w client",
-    "dev:server": "npm run dev -w server",
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:legacy-server": "npm run dev -w server",
     "build:client": "npm run build -w client",
     "build:server": "npm run build -w server",
     "build": "npm run build:server && npm run build:client"

@@ -1,0 +1,615 @@
+from typing import Literal, Dict, Optional
+from  pydantic import BaseModel
+
+from app.services.llm import SHORT_TASK_MAX_TOKENS, call_deepseek
+from app.models.chat import ChatMessage, ChatOptions
+from app.utils.logger import logger
+
+# 所有合法的意图标签集合，用于从 LLM 返回内容中提取有效意图
+VALID_INTENTS = {"illness", "feeding", "sleep", "development", "emergency", "daily_care", "vaccine", "general", "file_qa", "off_topic"}
+
+# 1. 定义所有可能的意图类型（类似于 TS 的 type Intent = "illness" | "feeding" | ...）
+Intent = Literal["illness", "feeding", "sleep", "development", "emergency", "daily_care", "vaccine", "general", "file_qa", "off_topic"]
+
+
+# ===================================================================
+# 关键词规则
+# ===================================================================
+#
+# 关键词匹配规则 — 一组领域关键词和对应的意图标签
+#
+# 每条规则定义：
+#   - keywords:   该领域的关键词列表，用于在用户问题中进行子串匹配
+#   - intent:     匹配成功后分配的意图标签
+#   - confidence: 基准置信度（0-1），命中后还会根据命中关键词数量微调
+#
+# 置信度设计：
+#   - emergency:  1.0  — 命中即立即采纳，不走 LLM（最高优先级）
+#   - vaccine:    0.95 — 疫苗关键词高度特异，几乎不会误判
+#   - illness / feeding / sleep: 0.9 — 核心领域，高置信但不绝对
+#   - development / daily_care:  0.85 — 关键词可能和其他领域重叠，适度保守
+#
+# 备注：
+#   规则按优先级从高到低排列。classifyByKeyword() 遍历所有规则后取最高置信度，
+#   因此排列顺序不影响结果，但 emergency 排第一有利于代码可读性。
+
+class KeywordRule(BaseModel):
+    keywords: list[str]
+    intent: Intent
+    confidence: float  # 0-1，基准置信度
+
+# 意图路由结果
+# 下游消费者（对话控制器）读取此结构，将 `prompt` 字段作为 System Prompt 传入 LLM。
+# `source` 和 `confidence` 用于日志、监控和 A/B 分析。
+class IntentResult(BaseModel):
+    # 分类后的意图标签 
+    intent: Intent
+    # 置信度 0-1，keyword 来源为精确计算值，llm 来源固定 0.8
+    confidence: float
+    # 分类来源：keyword（本地匹配）或 llm（DeepSeek 分类）
+    source: Literal["keyword", "llm"]
+    # 拼接好的完整 System Prompt，可直接作为 LLM 调用的 system message
+    prompt: str
+
+# 各意图的领域附加指令 — 拼接到 BASE_PROMPT 末尾
+#
+# 拼接规则（见下方 build_system_prompt）：
+#   - 一般育儿意图：BASE_PROMPT + INTENT_APPENDS[intent]
+#   - emergency / off_topic：直接使用 INTENT_APPENDS[intent]，不拼接 BASE_PROMPT
+#
+# 每条附加指令的作用：
+#   - 强化该领域的回答侧重点（如疾病强调量化指标、喂养强调分月龄表格）
+#   - 调整语气倾向（发育避免制造焦虑、急救冷静果断）
+#   - 给出该领域特有的就医指征
+#
+# 备注：
+#   general 的附加指令为空字符串，即纯 BASE_PROMPT。
+#   emergency 和 off_topic 的值是**完整独立 prompt**（角色 + 回答结构 + 对话铁律
+#   全在里面），不拼 BASE_PROMPT —— 详见 STANDALONE_PROMPTS 的说明。
+# 2. 数据结构（直接复制多行文本）
+INTENT_APPENDS: Dict[Intent, str] = {
+    "illness": """
+## 🩺 疾病模式
+- 强调量化指标：具体体温阈值、持续时间、脱水征象（6-8h无尿、前囟门凹陷、哭无泪）
+- 🔴 部分必须列出至少 4 个具体危险信号
+- 用药说明必附带"为什么"（不交替→伤肾、不同服→成分重叠）""",
+    
+    "feeding": """
+## 🍼 喂养模式
+- 优先给出分月龄的喂养建议表格（0-3月/3-6月/6-12月/1岁+）
+- 涉及厌奶/挑食时强调"这是正常阶段，绝大多数宝宝会自行度过"
+- 不过度强调就医，只在体重下降、脱水等明确指征时才建议就诊""",
+    
+    "sleep": """
+## 😴 睡眠模式
+- 给出分月龄的睡眠时长参考（新生儿16-20h / 3-6月14-16h / 6-12月12-15h）
+- 优先推荐温和的睡眠训练方法（逐步消退法、安抚降级），不建议哭声免疫法
+- 就医指征：只在怀疑呼吸暂停、异常嗜睡等情况下提出""",
+    
+    "development": """
+## 📈 发育模式
+- 强调"每个宝宝节奏不同，比别的孩子慢≠有问题"
+- 给出发育里程碑的正常区间（如翻身4-7月、独坐6-8月、走路10-18月）
+- 避免制造焦虑，推荐具体的早期干预游戏而非空洞的"多练习""",
+    
+    "emergency": """你是"小熊育儿助手"🐻 — 儿科急救专家。当宝宝遇到跌落、烫伤、呛噎、抽搐等紧急情况时，你的任务不是科普，是救命。
+
+## 🚨 急救回答规则
+
+⚠️ 只用以下三段结构，不要用五段式，不要展开长篇原理，总共不超过300字：
+
+1. 🚨 **现在立刻做什么**
+   · 跌落/摔伤："先不要立刻抱起宝宝！蹲下观察10秒，确认能否活动、能否哭出声。如果宝宝立即大哭、四肢能动 → 安全抱起安抚。如果不动、不哭、眼神发直 → 立即拨打120，不要移动"
+   · 抽搐："立即让宝宝平躺侧头，解开衣领，移开周围尖锐物。不要往嘴里塞任何东西，不要按压四肢。记录抽搐开始时间和持续时长，抽完立即就医"
+   · 烫伤："立即用流动冷水冲15分钟以上，冲水时脱掉烫伤处的衣物（粘住不要撕）。不要涂牙膏、酱油、香油"
+   · 呛噎窒息："面朝下趴在前臂，掌根拍背5次，翻正压胸5次，交替直到异物排出"
+
+2. ⛔ **千万别做（关键禁忌）**
+
+3. 🏥 **什么情况立刻打120**
+   · 列3-5条最关键的，每条不超过15字
+
+对话铁律：
+- 第一句话就是急救动作，不共情，不安抚，直接告诉家长做什么
+- 不用比喻，不解释原理
+- 最后一句必须问关键信息帮助判断严重程度""",
+    
+    "daily_care": """
+## 🧴 日常护理模式
+- 给出具体的步骤清单（如洗澡水温37-38℃、脐带护理用75%酒精棉签从内向外）
+- 强调安全和预防，如跌落预防、烫伤预防
+- 轻松实用语气，不需要过度强调就医""",
+    
+    "vaccine": """
+## 💉 疫苗模式
+- 区分"正常疫苗反应"和"需要就医的异常反应"
+- 给出常见疫苗的反应时间窗口（麻腮风7-12天发热、百白破24-48h发热）
+- 强调"不要因为轻微反应推迟后续接种""",
+    
+    "general": "",
+
+    # 非育儿问题同样是**完整独立 prompt**（不拼 BASE_PROMPT）。
+    # 为什么：BASE_PROMPT 通篇是"儿科主任医师 + 五段式问诊"的设定，
+    # 问「你是谁」时它会硬把回答拽成问诊体（实测输出过「🚨 什么时候去医院：这个问题不用去医院😄」）。
+    # 这里干脆不复用，从设定上就换成"简短友好的助手"。
+    "off_topic": """你是"小熊育儿助手"🐻 —— 一个专注 0-6 岁宝宝养育与健康的 AI 助手。
+
+用户这条消息**与育儿无关**（可能是打招呼、询问你的身份，或者问其他领域的事）。请：
+
+- 用两三句话简短、友好地直接回答；
+- **不要**使用育儿回答的五段式结构，**不要**出现「什么时候去医院」这类与问题无关的小节；
+- **不要**编造就医建议，**不要**补免责声明；
+- **不要**提「知识库」「参考资料」这类内部机制 —— 那是我们系统内部的事；
+- 如果是打招呼或询问你的身份，顺带说清你能帮什么忙，并把话题自然引回育儿。""",
+
+    # 就着用户上传的文件回答。
+    #
+    # 为什么需要独立一档：用户上传完文件后打的第一句话往往没有信息量（「帮我看看」），
+    # 脱离附件看它确实"与育儿无关"，但那只是**问题文本**没有信息，不是**这件事**与育儿无关。
+    # 这一档存在的意义就是把判断依据从"问题文本"换成"问题 + 文件"。
+    "file_qa": """你是"小熊育儿助手"🐻 —— 一个专注 0-6 岁宝宝养育与健康的 AI 助手。
+
+用户附上了一份文件，并希望你**就着这份文件**回答。请：
+
+- 先直接回答用户的问题，内容以文件里的信息为准；文件里没写的，明确说"这份文件里没提到"，不要编；
+- **不要**套用五段式问诊结构 —— 那是给"宝宝发烧怎么办"这类问题用的，用来读文件会很别扭；
+  按问题的实际需要组织即可；
+- 如果文件内容涉及宝宝的健康指标、用药或异常数值，给出判断的同时保留就医提示
+  （🔴立即就医 / 🟡建议就诊 / 🟢继续观察）；
+- 如果读下来发现文件**其实与育儿无关**（简历、代码、与宝宝无关的合同等），
+  如实说明它是什么，并把话题自然引回育儿 —— 不要硬套育儿模板，也不要假装读懂了。""",
+}
+
+# 基础 System Prompt — 先分 A/B 类，再决定用不用五段式
+
+# 适用意图：illness / feeding / sleep / development / daily_care / vaccine / general
+# 不适用于：emergency（急救使用完全独立的 prompt）
+
+# A 类（育儿 / 宝宝健康）走五段式：
+# 1. 🏷 先给结论   — 1-2 句核心判断，让家长立刻知道严重程度
+# 2. 📖 原理一句话 — 用比喻解释，1-3 句即可，降低认知负担
+# 3. ✅ 具体怎么做 — 分情况给出操作指南，有量化建议
+# 4. 🔴 就医判断   — 三级标注：🔴立即就医 / 🟡建议就诊 / 🟢继续观察
+# 5. 🩺 一行免责   — 法律安全底线
+
+# B 类（与育儿无关：询问身份、闲聊、其他领域）**不套五段式**。
+# 原先这里写的是「必须严格遵循，不可跳过任何一步」，且 general 也吃这套，
+# 于是「你是谁」会输出「🚨 什么时候去医院：这个问题不用去医院😄」。
+
+# 临床硬知识已嵌入 prompt 中（退烧药、禁忌、就医指征），
+# 减少 LLM 幻觉。如需更新医学知识，直接修改本常量即可。
+
+BASE_PROMPT = f"""你是"小熊育儿助手"🐻 — 拥有 15 年临床经验的儿科主任医师。
+风格温暖但不啰嗦，专业但不吓人。目标：让焦虑的家长 30 秒内找到答案。
+
+## 回答结构
+
+先判断问题属于哪一类，再按对应方式作答：
+
+**A 类｜育儿 / 宝宝健康问题** —— 严格按五段式作答，不可跳过任何一步：
+1. 🏷 **先给结论**（1-2句核心判断）
+2. 📖 **原理一句话**（用比喻解释，1-3句即可）
+3. ✅ **具体怎么做**（分情况给出操作指南）
+4. 🔴 **什么时候去医院**（带具体量化指标，「🔴立即就医」「🟡建议就诊」「🟢继续观察」三级标注）
+5. 🩺 **一行免责**
+
+**B 类｜与育儿无关的问题**（询问你是谁、闲聊、其他领域的问题）—— 两三句话直接、友好地回答：
+- **不要**套用上面的五段式，尤其不要出现「什么时候去医院」这种与问题无关的小节
+- 不要编造就医建议，也不要补一段免责声明
+- 不要提「知识库」「参考资料」这类内部机制
+
+## 临床硬知识（必要时使用）
+- 退烧药：对乙酰氨基酚（≥3月龄，间隔≥4h）| 布洛芬（≥6月龄，间隔≥6h）
+- ❌酒精擦浴=中毒 ❌捂汗=惊厥 ❌交替用药=伤肾 ❌和复方感冒药同服=成分过量
+- <3月龄肛温≥38℃→直接去急诊
+- 退烧后出汗及时擦干换干爽衣物
+
+## 对话铁律（针对 A 类育儿问题）
+- 开场必共情，根据问题类型调整语气（疾病类要安抚、喂养/睡眠类要缓解焦虑、急救类要冷静果断）
+- 没给月龄/体重→立刻追问，不猜
+- 每句话都让家长觉得"有用"，删掉任何不增加决策价值的句子
+- 说"不建议"时必跟理由+替代方案
+- 回答末尾追问 1-2 个关键信息，引导家长补充"""
+
+# 这两档用**完整独立 prompt**，不与 BASE_PROMPT 拼接：
+#   - emergency：急救要三段式简洁结构，五段式科普会稀释紧迫感；
+#   - off_topic：BASE_PROMPT 通篇是儿科问诊设定，问「你是谁」会被硬拽成问诊体
+#     （实测输出过「🚨 什么时候去医院：这个问题不用去医院😄」）。
+STANDALONE_PROMPTS = {"emergency", "off_topic", "file_qa"}
+
+
+def build_system_prompt(intent: Intent) -> str:
+    """按意图拼出 System Prompt：独立档直接用，其余 = BASE_PROMPT + 领域附加。
+
+    原先这行三元表达式在 route_intent 里写了两遍，加 off_topic 时两处都得改、
+    漏一处就会出现"关键词路径对、LLM 路径错"的不一致，所以收成一个入口。
+    """
+    if intent in STANDALONE_PROMPTS:
+        return INTENT_APPENDS[intent]
+    return BASE_PROMPT + INTENT_APPENDS[intent]
+
+# ===================================================================
+# 关键词规则库 — 共 7 组，覆盖所有非 general 意图
+# ===================================================================
+#
+# 维护指南：
+#   - 新增关键词时避免过于宽泛（如"不"会命中大量不相关问题）
+#   - 如果某个意图频繁被误判，先检查关键词是否与其他领域重叠
+#   - 调整 confidence 值比新增关键词更安全（避免意外命中）
+#
+# 急救关键词（confidence: 1.0）：
+#   命中后立即采纳，绕过 LLM。因此急救关键词必须**高精度**——
+#   宁可漏判（走 LLM 兜底）也不可误判（影响用户生命安全感知）。
+
+KEYWORD_RULES: list[KeywordRule] = [
+    # 急救（最高优先级 — 命中了立刻告警模式）
+    KeywordRule(
+        keywords=['抽搐', '惊厥', '窒息', '呛到', '跌落后', '摔到头', '烫伤', '烧伤',
+                  '误食', '中毒', '溺水', '没呼吸', '没心跳', '没意识', '叫不醒',
+                  '翻白眼', '口吐白沫', '车祸', '高处坠落', '摔下来', '从床上摔',
+                  '磕到头', '撞到头', '掉下床', '摔下床', '摔伤', '摔到'],
+        intent='emergency',
+        confidence=1.0,
+    ),
+    # 疾病护理
+    KeywordRule(
+        keywords=['发烧', '发热', '退烧', '咳嗽', '流鼻涕', '鼻塞', '感冒', '腹泻', '拉肚子',
+                  '拉稀', '呕吐', '吐奶', '便秘', '湿疹', '皮疹', '红疹', '过敏', '喘息',
+                  '喉咙', '嗓子', '发炎', '支气管', '肺炎', '肠炎', '中耳炎', '鹅口疮',
+                  '生病', '不舒服', '难受', '病', '咳', '烧', '痰'],
+        intent='illness',
+        confidence=0.9,
+    ),
+    # 喂养
+    KeywordRule(
+        keywords=['母乳', '配方奶', '奶粉', '辅食', '厌奶', '断奶', '夜奶', '奶量', '喂奶',
+                  '吃奶', '不吃', '不爱吃', '挑食', '厌食', '喂养', '奶瓶', '乳头', '堵奶',
+                  '追奶', '营养', '维生素d', '维生素D', '补铁', '补钙', '缺铁', '缺钙',
+                  '米粉', '喝奶', '喝多少', '吃饱'],
+        intent='feeding',
+        confidence=0.9,
+    ),
+    # 睡眠
+    KeywordRule(
+        keywords=['不睡觉', '夜醒', '哄睡', '奶睡', '抱睡', '睡眠', '睡整觉', '早醒',
+                  '白天睡', '晚上不睡', '昼夜颠倒', '并觉', '噩梦', '夜惊', '摇头', '蹭头',
+                  '睡不踏实', '一放就醒', '落地醒', '闹觉'],
+        intent='sleep',
+        confidence=0.9,
+    ),
+    # 生长发育
+    KeywordRule(
+        keywords=['翻身', '爬行', '走路', '说话', '长牙', '出牙', '囟门', '发育', '身高',
+                  '体重', '不长', '偏矮', '偏瘦', '大运动', '精细运动', '语言', '不会',
+                  '还不会', '里程碑', '腿型', '不会走', '不会说', '不会爬', '不会翻'],
+        intent='development',
+        confidence=0.85,
+    ),
+    # 疫苗
+    KeywordRule(
+        keywords=['疫苗', '接种', '打针', '疫苗反应', '预防针', '乙肝疫苗', '百白破',
+                  '麻腮风', '脊灰', '卡介苗', '自费疫苗', '免费疫苗', '体检', '儿保'],
+        intent='vaccine',
+        confidence=0.95,
+    ),
+    # 日常护理
+    KeywordRule(
+        keywords=['洗澡', '脐带', '抚触', '剪指甲', '防晒', '蚊虫', '红臀', '红屁股',
+                  '热疹', '痱子', '清洁', '换尿布', '穿衣服', '室温', '枕头', '被子',
+                  '睡袋', '安抚奶嘴', '咬胶', '玩具'],
+        intent='daily_care',
+        confidence=0.85,
+    ),
+]
+
+# ===================================================================
+# 元问题（问助手自己是誰 / 能做什么）— 整句匹配，不走关键词子串
+# ===================================================================
+#
+# 为什么**不能**把它做成一条普通 KeywordRule：那套是**子串匹配**，
+# 而「你是谁？我家宝宝晚上总哭闹」里也含「你是谁」—— 实测会被判成 off_topic
+# （关键词路径 0.97，直接采纳），一条真育儿问题就这样被"不答"了。
+# 在育儿/医疗场景里，误判成不答比多套一层回答模板严重得多。
+#
+# 所以这里改成整句判定：去掉首尾空白和标点后必须**等于**某个模式（或以其开头），
+# 再加一道长度上限 —— 元问题一定很短，长句一律不判。
+META_QUESTION_PATTERNS = (
+    '你是谁', '你叫什么', '你是什么', '你是什么助手', '你叫什么名字',
+    '你能做什么', '你会做什么', '你能干嘛', '你能干什么', '你有什么功能',
+    '介绍一下你自己', '介绍下你自己', '自我介绍一下',
+)
+
+# 允许出现在首尾的噪音：标点 + 语气词。只去**首尾**，中间的一律不动。
+_META_TRAILING_NOISE = '？?。.！!~～、,， 呀啊呢吧哦嘛哈'
+
+
+def _is_meta_question(question: str) -> bool:
+    """判断是不是「问助手自身」的元问题。
+
+    要求**整句就等于**某个模式（只允许去掉首尾的标点和语气词），
+    绝不做子串或前缀匹配。
+
+    踩过的坑：最早写成 `startswith` + 长度上限 15，结果「你是谁？我家宝宝晚上总哭闹」
+    正好 12 个字，前缀匹配命中 → 一条真育儿问题被判成「不答」。
+    在育儿/医疗场景里，误判成不答比多套一层回答模板严重得多，所以判定要从严。
+    """
+    stripped = question.strip().strip(_META_TRAILING_NOISE)
+    return stripped in META_QUESTION_PATTERNS
+
+
+# ===================================================================
+# 分类逻辑
+# ===================================================================
+#
+# LLM 分类提示词 — 零样本分类，temperature=0 保证确定性
+#
+# 输入契约：{question} 占位符将被替换为用户原始问题
+# 输出契约：LLM 返回一个意图标签词（illness / feeding / sleep / development / emergency / daily_care / vaccine / general）
+#
+# 备注：
+#   使用 maxTokens=10 限制输出长度，减少成本和延迟。
+#   classifyByLLM() 会从返回内容中提取第一个匹配的有效意图标签，
+#   因此即使 LLM 多输出了解释文字，也能正确解析。
+
+LLM_CLASSIFY_PROMPT = """判断以下问题属于哪个类别，只输出一个词：
+
+类别：illness(疾病) feeding(喂养) sleep(睡眠) development(发育) emergency(急救) daily_care(日常护理) vaccine(疫苗) general(其他育儿问题) off_topic(与育儿完全无关)
+
+⚠️ 判定 off_topic 的门槛很高，务必谨慎：
+- 只要问题与宝宝 / 育儿有**任何**关联，就必须归到对应的育儿类别，**不要**选 off_topic；
+- off_topic 只用于三种情况：询问你（助手）自身的身份或能力、纯闲聊、明确属于其他领域的问题；
+- **拿不准就选 general** —— 把育儿问题误判成 off_topic 会让家长得不到该有的建议，
+  比多套一层回答模板严重得多。
+
+问题：{question}
+
+类别："""
+
+
+# 带附件时的分类 prompt —— 与上面那个的区别是：判断依据从「问题文本」变成「问题 + 文件」。
+#
+# 为什么必须换 prompt：同样一句「帮我看看」，
+#   附件是体检报告 → 这是育儿话题，该答；
+#   附件是简历     → 这是非育儿话题，该拒。
+# 只看问题文本永远分不开这两者，而用户的真实意图就藏在那份文件里。
+LLM_CLASSIFY_WITH_FILE_PROMPT = """判断这条用户消息属于哪个类别，只输出一个词。
+
+用户这次**附上了一份文件**，关于它的情况：
+{file_context}
+
+用户的问题：{question}
+
+类别：illness(疾病) feeding(喂养) sleep(睡眠) development(发育) emergency(急救) daily_care(日常护理) vaccine(疫苗) general(其他育儿问题) file_qa(就着这份文件回答) off_topic(与育儿完全无关)
+
+判断顺序（按顺序，命中即停）：
+1. **问题本身**涉及宝宝 / 育儿 → 选对应的育儿类别。文件只是补充资料，不必管它是什么。
+2. 问题本身没提育儿，但**「问题 + 文件内容」合起来**是育儿话题 → 选 `file_qa`。
+   典型：文件是体检报告 / 化验单 / 疫苗本，问题只是「帮我看看」「这份呢」。
+3. 两者都与育儿无关 → 选 `off_topic`。
+   典型：文件是简历 / 代码 / 与宝宝无关的合同，问题只是「帮我看看」。
+
+⚠️ 第 2 步和第 3 步的区别**只在文件内容**。不要因为问题文本里没出现"宝宝"就一律判 off_topic。
+拿不准时选 `file_qa` —— 用户主动附上文件是这个产品里最强的意图信号，冷落它比多答一次糟糕。
+
+类别："""
+
+
+def classify_by_keyword(question: str) -> Optional[IntentResult]:
+    """
+    关键词匹配分类 — 第一层分诊
+
+    ## 算法
+
+    1. 遍历所有 KEYWORD_RULES，对每条规则：
+       a. 将该规则的 keywords 与用户问题做子串包含匹配（Python 的 `in` 操作符）
+       b. 计算置信度：基准置信度 + 命中关键词数 × 0.02（封顶 1.0）
+          - 例：命中 3 个 illness 关键词 → confidence = 0.9 + 3×0.02 = 0.96
+       c. 保留当前最高置信度的意图
+    2. 判断：最高置信度 >= 0.8 → 返回结果；< 0.8 → 返回 None（触发 LLM 兜底）
+
+    ## 输入输出契约
+
+      - 输入：用户原始问题字符串（不预处理，保留原始措辞以匹配多字关键词）
+      - 输出：IntentResult 或 None
+        - None 表示关键词匹配不确定，调用方应进入 LLM 分类
+
+    ## 设计考量
+
+      - 置信度阶梯：emergency(1.0) > vaccine(0.95) > illness/feeding/sleep(0.9) > development/daily_care(0.85)
+        反映了各领域关键词的特异性——特异性越高（误判风险越低），基准置信度越高
+      - 阈值 0.8：低于此值认为关键词匹配不可靠。development 和 daily_care
+        需要命中 0 个额外关键词时 confidence=0.85，刚好超过阈值
+      - 时间复杂度 O(R × K × Q)，其中 R=规则数(7)，K=平均关键词数(~20)，Q=问题长度
+        实际 <1ms，对用户体验无影响
+
+    Args:
+        question: 用户输入的自然语言问题（原始文本，不做清洗）
+
+    Returns:
+        匹配结果（confidence >= 0.8）或 None（匹配不确定，需 LLM 兜底）
+    """
+    # 初始化为兜底意图，置信度为 0
+    # 元问题先判：整句匹配，命中就短路，不再走下面的子串关键词
+    if _is_meta_question(question):
+        return IntentResult(intent='off_topic', confidence=0.95, source='keyword', prompt='')
+
+    best_intent: Intent = 'general'
+    best_confidence = 0
+
+    # 遍历所有规则组，计算每组的关键词命中情况
+    for rule in KEYWORD_RULES:
+        # 子串匹配：找出 question 中包含的所有该规则关键词
+        matched = [kw for kw in rule.keywords if kw in question]
+        if len(matched) > 0:
+            # 置信度公式：基准值 + 命中数 × 0.02，封顶 1.0
+            # 多命中关键词说明问题与该领域高度相关，适当提高置信度
+            confidence = min(rule.confidence + len(matched) * 0.02, 1.0)
+            # 贪心策略：保留最高置信度
+            if confidence > best_confidence:
+                best_confidence = confidence
+                best_intent = rule.intent
+
+    # 阈值判断：>= 0.8 认为关键词匹配可信
+    # 0.8 是经过实测调优的平衡点——太低会误判，太高会过度依赖 LLM
+    if best_confidence >= 0.8:
+        return IntentResult(
+            intent=best_intent,
+            confidence=best_confidence,
+            source="keyword",
+            prompt="",  # 调用方会用 INTENT_APPENDS 重新拼接
+        )
+    
+    # 置信度不足或无任何关键词命中 → 返回 null，调用方进入 LLM 分类
+    return None
+
+
+def classify_by_llm(question: str, file_context: Optional[str] = None) -> Intent:
+    try:
+        # 1. 构建单条 user 消息（分类不需要 system prompt 和历史）
+        #
+        # 带附件时换一个 prompt：判断依据从「问题文本」变成「问题 + 文件摘要」。
+        # 同样一句「帮我看看」，附件是体检报告该答、是简历该拒 —— 只看问题文本
+        # 永远分不开这两者。（见 LLM_CLASSIFY_WITH_FILE_PROMPT 的说明。）
+        if file_context:
+            prompt_text = (
+                LLM_CLASSIFY_WITH_FILE_PROMPT
+                .replace("{file_context}", file_context)
+                .replace("{question}", question)
+            )
+        else:
+            prompt_text = LLM_CLASSIFY_PROMPT.replace("{question}", question)
+
+        # 2. 调用 DeepSeek（temperature=0 保证确定性；预算用 SHORT_TASK_MAX_TOKENS）
+        #
+        # 这里原先是 maxTokens=10 —— 想着「只要一个词，10 个 token 够了」。
+        # 但当前模型是推理模型，会先输出思维链再输出正文，两者共用这个额度：
+        # 10 个 token 全被思维链吃掉，content 恒为空串，分类**每次都**降级成
+        # general（表面无异常，只是系统提示词用错了档）。实测见 llm.py 的说明。
+        messages = [ChatMessage(role="user", content=prompt_text)]
+        options = ChatOptions(temperature=0, maxTokens=SHORT_TASK_MAX_TOKENS)
+        content = call_deepseek(messages, options)
+
+        # 3. 从返回内容中提取第一个匹配的有效意图标签
+        #    即使 LLM 多输出了解释文字，也能正确解析
+        trimmed = content.strip().lower()
+        for intent in VALID_INTENTS:
+            if intent in trimmed:
+                return intent  # type: ignore  # Literal 匹配
+            
+        # 4. 兜底：解析不到任何有效意图 → general
+        return "general"
+    except Exception as e:
+        # 静默降级：LLM 不可用时（网络故障、API 限流、超时），
+        # 返回 'general' 保证对话流程不中断
+        # 不记录 error 级别日志，由调用方 routeIntent 统一记录
+        logger.warning("意图路由 [静默降级]: → LLM 不可用")
+        return "general"
+
+def route_intent(question: str, file_context: Optional[str] = None) -> IntentResult:
+    """
+    意图路由 — 服务入口函数，双层分诊策略
+
+    ## 完整流程
+
+    ```
+                        ┌─────────────────┐
+                        │  routeIntent()   │
+                        └────────┬────────┘
+                                 │
+                        ┌────────▼────────┐
+                        │ classifyByKeyword│  Step 1: 关键词匹配
+                        └────────┬────────┘
+                                 │
+                       ┌─────────▼─────────┐
+                       │ confidence >= 0.9?│
+                       └────┬─────────┬────┘
+                            │YES      │NO / None
+                       ┌────▼────┐ ┌─▼──────────┐
+                       │ keyword │ │classifyByLLM│  Step 2: LLM 兜底
+                       │ 直接采纳│ └──────┬──────┘
+                       └────┬────┘        │
+                            │        ┌────▼────┐
+                            │        │ 拼接 SP │  Step 3: 拼接 System Prompt
+                            │        └────┬────┘
+                            │             │
+                       ┌────▼─────────────▼────┐
+                       │    返回 IntentResult   │
+                       └───────────────────────┘
+    ```
+
+    ## 决策矩阵
+
+    | 关键词结果          | 置信度   | 动作                          | source   |
+    |--------------------|----------|-------------------------------|----------|
+    | 命中 emergency     | >= 1.0   | 直接采纳，独立 SP             | keyword  |
+    | 命中 off_topic     | >= 0.9   | 直接采纳，独立 SP             | keyword  |
+    | 命中其他领域       | >= 0.9   | 直接采纳，拼接 BASE_PROMPT    | keyword  |
+    | 命中但低置信       | 0.8-0.89 | LLM 复核确认                  | llm      |
+    | 完全未命中         | —        | LLM 从头分类                  | llm      |
+    | LLM 调用失败       | —        | 降级为 general                | llm      |
+
+    ## Prompt 拼接规则（统一走 build_system_prompt）
+
+      - **emergency / off_topic**：直接使用 INTENT_APPENDS[intent]（完整独立 prompt）
+        - emergency：急救要三段式简洁结构，五段式科普会稀释紧迫感
+        - off_topic：BASE_PROMPT 是儿科问诊设定，问「你是谁」会被硬拽成问诊体
+      - **其他意图**：BASE_PROMPT + INTENT_APPENDS[intent]
+        - BASE_PROMPT 提供通用角色和回答结构
+        - INTENT_APPENDS 提供领域特有的侧重点和就医指征
+      - **general**：仅 BASE_PROMPT（INTENT_APPENDS["general"] 为空字符串）
+
+    ## 可观测性
+
+    每个分支都有 debug 日志，记录意图、置信度和来源：
+      - 意图路由 [关键词]: illness (0.94) — 关键词直接命中
+      - 意图路由 [关键词低置信]: development (0.87) → LLM复核 — 进入复核
+      - 意图路由 [LLM]: feeding — LLM 分类结果
+
+    Args:
+        question: 用户输入的自然语言问题
+        file_context: 用户附带的文件的归类摘要（见 upload_classify.format_file_context）。
+                      **有值时**判断依据会从「问题文本」升级成「问题 + 文件」：
+                      同样一句「帮我看看」，附件是体检报告要判成 file_qa（该答），
+                      附件是简历要判成 off_topic（该拒）。没值时行为与以前完全一致。
+
+    Returns:
+        意图分类结果，包含拼接好的 System Prompt。LLM 失败时返回 general 意图。
+
+    Raises:
+        不抛出异常 — 所有降级路径均保证返回有效 IntentResult
+    """
+    # Step 1: 关键词匹配（本地，<1ms）
+    keyword_result = classify_by_keyword(question)
+
+    logger.debug("--- keyword_result ---- %s", keyword_result)
+
+    # 高置信度直接采纳 — 最快路径，零 LLM 成本
+    if keyword_result and keyword_result.confidence >= 0.9:
+        prompt = build_system_prompt(keyword_result.intent)
+
+        return IntentResult(
+            intent = keyword_result.intent,
+            confidence =  keyword_result.confidence,
+            source =  'keyword',
+            prompt = prompt,
+        )
+    
+    # Step 2: 低于置信度阈值 → LLM 复核或从头分类
+    # 关键词低置信度时记录日志，帮助排查是否误判
+    if keyword_result:
+        logger.warning("意图路由 [关键词低置信]: %s (%s) → LLM复核", keyword_result.intent, keyword_result.confidence)
+
+    # 调用 DeepSeek 进行 LLM 分类（或复核）
+    # 分类失败时 classifyByLLM 内部静默降级为 'general'
+    llm_intent = classify_by_llm(question, file_context)
+
+    # 拼接 System Prompt（与 keyword 路径共用同一个入口，避免两条路径拼法不一致）
+    prompt = build_system_prompt(llm_intent)
+
+    return IntentResult(
+        intent = llm_intent,
+        confidence =  0.8,
+        source =  'llm',
+        prompt = prompt,
+    )
+

@@ -16,7 +16,6 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Message } from '../../types/chat';
 import { MessageAvatar } from './MessageAvatar';
-import { ReferenceList } from './ReferenceList';
 import { TypingIndicator } from './TypingIndicator';
 import styles from './MessageBubble.module.less';
 
@@ -26,8 +25,14 @@ interface MessageBubbleProps {
   message: Message;
   /** 是否为当前对话的最后一条消息（用于判断流式状态等） */
   isLast: boolean;
-  /** 朗读回调，仅在 AI 消息、有内容、非流式时展示对应的朗读按钮 */
-  onReadAloud?: (text: string) => void;
+  /** 朗读/停止回调，仅在 AI 消息、有内容、非流式时展示对应的按钮 */
+  onReadAloud?: (messageId: string, text: string) => void;
+  /** 这条消息是否正在朗读（决定按钮显示「朗读」还是「停止」）。 */
+  isReading?: boolean;
+  /** 右侧引用面板当前是否展示的正是这条消息的引用。 */
+  isReferencesTarget?: boolean;
+  /** 点击「引用 N 条」时调用，把右侧面板切到这一轮。 */
+  onShowReferences?: (messageId: string) => void;
 }
 
 /**
@@ -47,6 +52,9 @@ export const MessageBubble = memo(function MessageBubble({
   message,
   isLast,
   onReadAloud,
+  isReading,
+  isReferencesTarget,
+  onShowReferences,
 }: MessageBubbleProps) {
   // 当前消息是否由用户发送
   const isUser = message.role === 'user';
@@ -77,20 +85,42 @@ export const MessageBubble = memo(function MessageBubble({
             ${message.error ? styles.errorBubble : ''}
           `}
         >
-          {/* 用户消息：纯文本展示（保留换行与空白） */}
+          {/* 用户消息：附件标签 + 纯文本（保留换行与空白） */}
           {isUser ? (
-            <p className={styles.messageText}>{message.content}</p>
+            <>
+              {/*
+                附件标签。`fileName` / `fileId` 一直都记在消息上（见 types/chat.ts
+                的 Message），但这里从来没渲染过 —— 结果是文件发出去之后，从列表里
+                完全看不出这条消息带了什么、AI 是就着哪份文件回答的。
+                fileId 不上屏：它只是内部 ID（uuid 前 8 位），对用户没有意义。
+              */}
+              {message.fileName && (
+                <span className={styles.fileChip} title={message.fileName}>
+                  📎 <span className={styles.fileName}>{message.fileName}</span>
+                </span>
+              )}
+              <p className={styles.messageText}>{message.content}</p>
+            </>
           ) : isStreaming ? (
             // 流式输出中：纯文本渲染，跳过 ReactMarkdown 避免逐 token 重复解析
             <p className={`markdown-content ${styles.markdownBody}`}>
               {message.content}
               <span className={styles.streamingCursor} />
             </p>
+          ) : message.stopped && !message.content ? (
+            // 点了「停止生成」且一个字都没收到 —— 渲染空 Markdown 会留下一个
+            // 空白气泡，看起来像界面坏了。直接给一句说明。
+            <p className={styles.stoppedText}>已停止生成</p>
           ) : (
-            // 流式结束后：完整 Markdown 渲染（GFM）
-            <div className={`markdown-content ${styles.markdownBody}`}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
-            </div>
+            <>
+              {/* 流式结束后：完整 Markdown 渲染（GFM） */}
+              <div className={`markdown-content ${styles.markdownBody}`}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+              </div>
+              {/* 答到一半被中断：必须显式标出来。育儿/医疗建议被截断后，
+                  看上去和一条完整结论没有区别，容易误导。 */}
+              {message.stopped && <p className={styles.stoppedText}>已停止生成</p>}
+            </>
           )}
 
           {/* 错误提示：仅当 message.error 非空时渲染 */}
@@ -99,22 +129,39 @@ export const MessageBubble = memo(function MessageBubble({
           )}
         </div>
 
-        {/* 引用列表：仅 AI 消息、有引用数据、且不在流式生成过程中才展示 */}
-        {!isUser && message.references && message.references.length > 0 && !isStreaming && (
-          <div className={styles.referenceArea}>
-            <ReferenceList references={message.references} />
-          </div>
-        )}
+        {/*
+          消息操作行：引用入口 + 朗读。
+          引用正文不塞回气泡（会把气泡撑得很长），但**入口必须留在这里** ——
+          右侧面板一次只能显示一轮，没有这个入口，前面几轮检索到的来源就再也找不到了。
+        */}
+        {!isUser && !isStreaming && (
+          ((message.references?.length ?? 0) > 0 || (message.content && onReadAloud)) && (
+            <div className={styles.messageActions}>
+              {(message.references?.length ?? 0) > 0 && (
+                <button
+                  onClick={() => onShowReferences?.(message.id)}
+                  className={`${styles.referenceChip} ${isReferencesTarget ? styles.referenceChipActive : ''}`}
+                  aria-pressed={Boolean(isReferencesTarget)}
+                  title={isReferencesTarget ? '右侧正在显示这条回答的引用' : '在右侧查看这条回答的引用来源'}
+                >
+                  📚 引用 {message.references!.length} 条
+                </button>
+              )}
 
-        {/* 朗读按钮：仅 AI 消息、有文本内容、非流式、且传入 onReadAloud 回调时展示 */}
-        {!isUser && message.content && !isStreaming && onReadAloud && (
-          <button
-            onClick={() => onReadAloud(message.content)}
-            className={styles.readAloudButton}
-            title="朗读此消息"
-          >
-            🔊 朗读
-          </button>
+              {/* 朗读/停止：同一个按钮做开关。正在读的这条显示「停止」，
+                  点一下立即 cancel 掉整条队列（长回答会被切成多块排队播放）。 */}
+              {message.content && onReadAloud && (
+                <button
+                  onClick={() => onReadAloud(message.id, message.content)}
+                  className={`${styles.readAloudButton} ${isReading ? styles.readAloudButtonActive : ''}`}
+                  aria-pressed={Boolean(isReading)}
+                  title={isReading ? '停止朗读' : '朗读此消息'}
+                >
+                  {isReading ? '⏹ 停止' : '🔊 朗读'}
+                </button>
+              )}
+            </div>
+          )
         )}
 
         {/* 流式生成指示器：流式进行中但尚无内容时展示"正在输入…"动画 */}

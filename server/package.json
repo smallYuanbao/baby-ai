@@ -4,7 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "predev": "lsof -ti:3001 | xargs kill -9 2>/dev/null || true",
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js"

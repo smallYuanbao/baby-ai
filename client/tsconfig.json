@@ -5,8 +5,9 @@
    * This tsconfig extends the project-wide base configuration (tsconfig.base.json)
    * and layers on client-specific settings:
    *   - JSX transform for React (automatic runtime import via react-jsx)
-   *   - Module path alias `@/` mapped to `./src/` for clean imports
    *   - Vite client type declarations for import.meta.env and asset handling
+   *
+   * 模块一律用相对路径导入；本项目没有配置 `@/` 路径别名（原因见 compilerOptions 内注释）。
    *
    * The client source lives under ./src and compiles to ./dist.
    */
@@ -23,13 +24,12 @@
     // Root of the TypeScript source files within this package
     "rootDir": "./src",
 
-    // Base directory for resolving non-relative module names
-    "baseUrl": ".",
-
-    // Path aliases — `@/components/Foo` resolves to `./src/components/Foo`
-    "paths": {
-      "@/*": ["./src/*"]
-    },
+    // 这里原本有个 `@/*` → `./src/*` 的 paths 别名，已删除，不要再加回来：
+    //   ① 全项目没有一处真实导入用过它（只在一条 JSDoc 注释里出现过）；
+    //   ② vite.config.ts 里也没有对应的 resolve.alias —— 就算配上，TS 认得，
+    //      Vite 不认得，代码照样跑不起来。
+    // 需要别名时，tsconfig 的 paths 和 Vite 的 resolve.alias 必须成对配置。
+    // （另注：`baseUrl` 已被 TS 废弃并将在 7.0 移除，也别再加。）
 
     // Include Vite's client-side type definitions (e.g. import.meta.env, static asset imports)
     "types": ["vite/client"]

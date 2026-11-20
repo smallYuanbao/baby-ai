@@ -1,0 +1,38 @@
+@import '../../styles/variables.less';
+
+// ============================================================
+//  LoadingState — 整块区域的加载占位
+//
+//  为什么要有这个组件：原来整页加载就是一个裸的 `<Spinner size="lg" />`，
+//  而 lg 只有 32px —— 实测它飘在 1272 × 798px 的空白页正中间，
+//  周围什么都没有，用户根本注意不到（反馈原话是「loading 看不太出来」）。
+//
+//  两条改动针对的就是这个：
+//    1. **加一行文字说明在加载什么** —— 让眼睛有落点，也告诉用户"没卡死，在等数据"；
+//    2. **转圈用品牌橙** —— 中性灰的圈在暖白背景上太弱，品牌色一眼能认出。
+//       （Spinner 内部用 currentColor，所以这里给 wrapper 上色即可，
+//         文字再单独覆盖回灰色，不跟着变橙。）
+// ============================================================
+
+.wrapper {
+  flex: 1;                      // 撑满父容器，让内容真正居中
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;                 // 转圈和文字之间
+  padding: 2rem;
+  color: @primary-500;          // ← Spinner 继承这个色
+
+  // 内容窄一点，文字不会拉成一整行
+  max-width: 20rem;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.text {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: @gray-500;             // 覆盖 wrapper 的橙色，文字保持中性
+}
