@@ -18,9 +18,13 @@ import { config } from '../config';
 /**
  * 当前登录用户的 API Key（方案 A 轻量鉴权 + 多租户隔离）。
  *
- * 后端 `app/core/auth.py` 通过 `Authorization: Bearer <key>` 解析出 user_id，
+ * 后端 `app/core/auth.py` 通过 `X-API-Key: <key>` 解析出 user_id，
  * 各存储层再按 user_id 过滤数据。key 持久化在 localStorage，切换用户后
  * 下一次请求即生效（隔离边界在服务端，前端只是替用户带上「身份凭证」）。
+ *
+ * 为什么不用 `Authorization: Bearer`：线上边缘的 Caddy Basic Auth 也占用
+ * 这个头，前端再发 Bearer 会把浏览器自动附带的 Basic 凭据覆盖掉，
+ * 导致登录框反复弹出。拆成 X-API-Key 后两个鉴权层互不干扰。
  */
 const API_KEY_STORAGE = 'baby-ai-api-key';
 
@@ -52,10 +56,12 @@ export function setApiKey(key: string): string {
 /**
  * 生成统一的鉴权请求头，供所有 fetch 调用注入。
  *
- * @returns `{ Authorization: "Bearer <key>" }` 头对象。
+ * @returns `{ "X-API-Key": "<key>" }` 头对象。
+ *
+ * 用 X-API-Key 而不是 Authorization，避免和边缘 Basic Auth 抢同一个头。
  */
 function authHeaders(): Record<string, string> {
-  return { Authorization: `Bearer ${currentApiKey}` };
+  return { 'X-API-Key': currentApiKey };
 }
 
 /**

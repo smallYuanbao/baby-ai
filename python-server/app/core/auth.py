@@ -41,16 +41,30 @@ API_KEYS: dict[str, str] = {
 ANONYMOUS_USER = "user_anonymous"
 
 
-def get_current_user_id(authorization: str | None = Header(default=None)) -> str:
+def get_current_user_id(
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+    authorization: str | None = Header(default=None),
+) -> str:
     """
-    FastAPI dependency：从 `Authorization: Bearer <key>` 解析出 user_id。
+    FastAPI dependency：解析 user_id。
 
-    - 未带 Authorization 头 → 返回匿名用户（宽松模式，便于本地 demo 不破坏既有调用）
-    - 带了但格式不对 / key 无效 → 401（明确拒绝非法凭证）
+    优先读 `X-API-Key`，兼容旧的 `Authorization: Bearer <key>`。
 
-    下游各端点拿到 user_id 后，必须把它传进存储层做查询过滤（见 growth_store / upload /
-    retriever），这才是隔离真正生效的地方。
+    为什么优先用 X-API-Key：边缘代理（如 Caddy Basic Auth）也占用
+    `Authorization` 头。前端如果继续发 `Bearer`，会把浏览器自动附带的
+    `Basic` 凭据覆盖掉，导致 Basic Auth 反复弹框。拆成两个头后互不干扰。
+
+    - 未带任何 key → 返回匿名用户（宽松模式，便于本地 demo）
+    - 带了但 key 无效 → 401
     """
+    token = (x_api_key or "").strip()
+    if token:
+        user_id = API_KEYS.get(token)
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="无效的 API Key")
+        return user_id
+
+    # 兼容旧客户端 / curl 的 Bearer 方式
     if authorization is None or authorization.strip() == "":
         return ANONYMOUS_USER
 
