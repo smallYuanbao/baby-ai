@@ -77,7 +77,9 @@ services:
   chroma:
     image: chromadb/chroma:latest
     volumes:
-      - chroma_data:/chroma/chroma
+      # 新版 chromadb/chroma 默认数据目录是 /data；挂到 /chroma/chroma 会挂空卷，
+      # 数据落在容器临时层，容器重建即丢失（2026-11-23 备份时发现）
+      - chroma_data:/data
     environment:
       - IS_PERSISTENT=TRUE
       - ANONYMIZED_TELEMETRY=FALSE
