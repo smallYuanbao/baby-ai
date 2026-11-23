@@ -19,7 +19,8 @@ services:
       context: .
       dockerfile: client/Dockerfile
     ports:
-      - "8081:80"
+      # 只绑本机:公网统一走 Caddy(443),避免绕过 HTTPS / 代理头 / 边缘规则
+      - "127.0.0.1:8081:80"
     depends_on:
       backend:
         condition: service_healthy
