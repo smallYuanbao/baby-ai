@@ -49,8 +49,8 @@ services:
       - CHROMA_PORT=8000
       - OLLAMA_BASE_URL=http://ollama:11434
       - RERANKER_URL=http://reranker:8011/rerank
-      # 精排成本控制：候选数从 10 降到 6（10×800 字 53s → 6×300 字 14s）
-      - RERANK_CANDIDATES=6
+      # 候选保持 10：降到 6 会让 hit@k 0.8 → 0.6（评测实测），质量优先
+      - RERANK_CANDIDATES=10
       - RERANK_TOP_K=5
       - MAX_FILE_SIZE_MB=10
     volumes:
@@ -106,8 +106,9 @@ services:
       # 服务器 4 核；从 2 提到 4，CPU 推理约快 1.5～2 倍
       - OMP_NUM_THREADS=4
       - MKL_NUM_THREADS=4
-      # 精排只看前 300 字（0 = 不截断）
-      - RERANK_MAX_CHARS=300
+      # 不截断：实测 400/500/800 字耗时相同（模型内部固定 512 token），
+      # 外层截断只丢信息、不省时间
+      - RERANK_MAX_CHARS=0
     restart: unless-stopped
     mem_limit: 4g
     healthcheck:

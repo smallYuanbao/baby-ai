@@ -96,10 +96,13 @@ logger = logging.getLogger("reranker")
 # The model is ~568M parameters; with FP16 it needs roughly 2.2 GB GPU VRAM.
 MODEL_NAME = "BAAI/bge-reranker-v2-m3"
 
-# Cross-Encoder 的耗时与「候选数 × 文本长度」成正比：CPU 上没有 GPU 时，
-# 一篇 800 字的文档比 300 字贵一倍多。截断到前 N 字保留开头结论，
-# 实测 10×800 字 53s → 10×300 字 23s。设为 0 表示不截断。
-MAX_DOC_CHARS = int(os.getenv("RERANK_MAX_CHARS", "300"))
+# 文档截断：0 = 不截断（推荐）。
+#
+# 实测（4 线程 CPU）：10 篇文档在 800/500/400 字下耗时都在 13~14s，
+# 说明 Cross-Encoder 内部会 padding/截断到固定 512 token ——
+# 外层再截断只丢信息，不省时间。保留原文让排序更准。
+# 如果以后换成不 padding 的推理后端，再按需打开（例如设为 300）。
+MAX_DOC_CHARS = int(os.getenv("RERANK_MAX_CHARS", "0"))
 
 # --------------- Global model handle ---------------
 # Loaded once at startup via the lifespan context manager and shared across
