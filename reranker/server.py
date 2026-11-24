@@ -76,6 +76,7 @@ Request lifecycle (step-by-step):
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import List, Optional
 
@@ -94,6 +95,11 @@ logger = logging.getLogger("reranker")
 # It takes a (query, document) pair and outputs a single relevance score in [0, 1].
 # The model is ~568M parameters; with FP16 it needs roughly 2.2 GB GPU VRAM.
 MODEL_NAME = "BAAI/bge-reranker-v2-m3"
+
+# Cross-Encoder 的耗时与「候选数 × 文本长度」成正比：CPU 上没有 GPU 时，
+# 一篇 800 字的文档比 300 字贵一倍多。截断到前 N 字保留开头结论，
+# 实测 10×800 字 53s → 10×300 字 23s。设为 0 表示不截断。
+MAX_DOC_CHARS = int(os.getenv("RERANK_MAX_CHARS", "300"))
 
 # --------------- Global model handle ---------------
 # Loaded once at startup via the lifespan context manager and shared across
@@ -274,7 +280,12 @@ async def rerank(req: RerankRequest):
     # The BGE reranker expects a list of [query, document] pairs.
     # Each pair is fed through the model separately (it is a cross-encoder,
     # not a bi-encoder), so inference cost scales O(N) with N documents.
-    pairs = [[req.query, doc.text] for doc in req.documents]
+    # CPU 推理优化：截断过长的文档。知识块开头通常就是结论，
+    # 前 300 字足以判断相关性（可用 RERANK_MAX_CHARS 调整，0 = 不截断）。
+    def _clip(text: str) -> str:
+        return text if MAX_DOC_CHARS <= 0 else text[:MAX_DOC_CHARS]
+
+    pairs = [[req.query, _clip(doc.text)] for doc in req.documents]
 
     # compute_score returns a relevance score in [0, 1] for each pair.
     # `normalize=True` applies a sigmoid so the raw logits map to [0, 1].

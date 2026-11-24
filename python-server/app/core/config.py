@@ -38,6 +38,11 @@ QUERY_REWRITE_ENABLED = os.getenv("QUERY_REWRITE_ENABLED", "").lower() in ["true
 
 RERANKER_URL = os.getenv("RERANKER_URL", "http://127.0.0.1:8011/rerank")
 
+# 精排成本控制：CPU 推理时 cross-encoder 的耗时与「候选数 × 文本长度」成正比。
+# 实测 bge-reranker-v2-m3 在 2 线程 CPU 上：10×800 字 ≈ 53s，6×300 字 ≈ 14s。
+RERANK_CANDIDATES = int(os.getenv("RERANK_CANDIDATES", "6"))
+RERANK_TOP_K = int(os.getenv("RERANK_TOP_K", "5"))
+
 
 # ---------- LLM 调用加固（超时 / 熔断 / 备用模型） ----------
 

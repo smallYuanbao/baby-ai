@@ -49,6 +49,9 @@ services:
       - CHROMA_PORT=8000
       - OLLAMA_BASE_URL=http://ollama:11434
       - RERANKER_URL=http://reranker:8011/rerank
+      # 精排成本控制：候选数从 10 降到 6（10×800 字 53s → 6×300 字 14s）
+      - RERANK_CANDIDATES=6
+      - RERANK_TOP_K=5
       - MAX_FILE_SIZE_MB=10
     volumes:
       - ./python-server/data:/app/data
@@ -96,8 +99,11 @@ services:
       - hf_cache:/root/.cache/huggingface
     environment:
       - HF_ENDPOINT=${HF_ENDPOINT:-https://huggingface.co}
-      - OMP_NUM_THREADS=2
-      - MKL_NUM_THREADS=2
+      # 服务器 4 核；从 2 提到 4，CPU 推理约快 1.5～2 倍
+      - OMP_NUM_THREADS=4
+      - MKL_NUM_THREADS=4
+      # 精排只看前 300 字（0 = 不截断）
+      - RERANK_MAX_CHARS=300
     restart: unless-stopped
     mem_limit: 4g
     healthcheck:

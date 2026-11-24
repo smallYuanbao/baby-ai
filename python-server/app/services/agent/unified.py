@@ -9,6 +9,7 @@ from app.services.tools import get_weather, WEATHER_TOOL
 from app.models.chat import ChatHistoryEntry, ChatMessage, Reference
 from app.services.rag.retriever import hybrid_search_rrf
 from app.services.rag.reranker import rerank
+from app.core.config import RERANK_CANDIDATES, RERANK_TOP_K
 from app.services.chat_service import _build_messages
 from app.services.pipeline.intent import IntentResult, route_intent
 from app.services.pipeline.rewrite import rewrite_query
@@ -172,11 +173,11 @@ def rag_and_rerank(intent_result: IntentResult, message: str ) -> tuple[list[str
         context_docs = []
         references = []
     else:
-        results = hybrid_search_rrf(message, top_k=10)
+        results = hybrid_search_rrf(message, top_k=RERANK_CANDIDATES)
 
 
         # 精排：BGE → DeepSeek → 原始距离排序
-        ranked_result = rerank(message, results, top_k=5)
+        ranked_result = rerank(message, results, top_k=RERANK_TOP_K)
 
         # 文本列表（给 buildPrompt 拼 prompt 用）
         context_docs = [d["text"] for d in ranked_result["rankedDocuments"]]

@@ -17,7 +17,12 @@ from app.services.pipeline.session import add_assitant_message, add_user_message
 from app.services.rag.reranker import rerank
 from app.utils.logger import logger
 from app.core.cache import TTLCache
-from app.core.config import RAG_CACHE_TTL, RAG_CACHE_MAXSIZE
+from app.core.config import (
+    RAG_CACHE_TTL,
+    RAG_CACHE_MAXSIZE,
+    RERANK_CANDIDATES,
+    RERANK_TOP_K,
+)
 
 # 防注入安全指令（追加到所有 System Prompt 末尾）
 DEFENSE_PROMPT = """
@@ -195,11 +200,11 @@ def get_rag_context(
             # RRF 排名融合。原来走的是线性加权（alpha=0.7），但稠密分和稀疏分的量纲
             # 本来就不可比，加权前得各自归一化，而归一化方式本身又是一个要调的超参。
             # RRF 只用「排名」不用「分数」，省掉这一层，且对异常分更稳。
-            results = hybrid_search_rrf(message, top_k=10)
+            results = hybrid_search_rrf(message, top_k=RERANK_CANDIDATES)
             checkpoint("混合检索")
 
             # 精排：BGE → DeepSeek → 原始距离排序（DeepSeek 兜底时会调 LLM）
-            ranked_result = rerank(message, results, top_k=5)
+            ranked_result = rerank(message, results, top_k=RERANK_TOP_K)
             checkpoint("精排")
 
             # 文本列表（给 buildPrompt 拼 prompt 用）
