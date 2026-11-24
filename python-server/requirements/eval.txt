@@ -1,0 +1,19 @@
+# 评测 / 实验脚本依赖（不进 backend 镜像）
+#
+# 使用：
+#   pip install -r requirements/eval.txt
+#
+# 涉及脚本：
+#   scripts/eval_rag.py          -> ragas / datasets / langchain*
+#   scripts/huggingface_demo.py  -> torch / transformers
+-r base.txt
+pytest
+datasets
+ragas
+langchain
+langchain_openai
+langchain_ollama
+langgraph
+langsmith
+transformers
+torch

@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 # ========== 第一阶段：构建阶段 ==========
 FROM python:3.12-slim AS builder
 
@@ -7,7 +9,14 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
 COPY requirements/base.txt requirements/
-RUN pip install --no-cache-dir -r requirements/base.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 只装运行时依赖（见 base.txt 顶部说明：torch/ragas 等在 eval.txt）。
+# cache mount：pip 下载的 wheel 存在构建缓存里，重建时不用重新下载。
+# 双源：清华为主，阿里云兜底（单源限速时可以自动换）。
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements/base.txt \
+      -i https://pypi.tuna.tsinghua.edu.cn/simple \
+      --extra-index-url https://mirrors.aliyun.com/pypi/simple/
 
 
 # ========== 第二阶段：运行阶段 ==========

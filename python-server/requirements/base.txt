@@ -1,7 +1,11 @@
+# 运行时依赖：只放 app/ 真正 import 的包。
+# 评测脚本用的重依赖（torch / transformers / ragas / langchain*）在 eval.txt，
+# 不要混进来——backend 镜像不需要它们，装上会让镜像多几 GB、构建多十几分钟。
 fastapi
 uvicorn[standard]
 chromadb
 openai
+requests
 slowapi
 tenacity
 python-dotenv
@@ -9,15 +13,4 @@ jieba
 rank-bm25
 pymupdf
 python-multipart
-datasets
-ragas
-langchain_openai
-langchain-ollama
 mcp
-pytest
-langchain
-langgraph
-langsmith
-
-transformers
-torch
