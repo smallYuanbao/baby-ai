@@ -10,13 +10,15 @@ ENV PATH="/opt/venv/bin:$PATH"
 WORKDIR /app
 COPY requirements/base.txt requirements/
 
-# 只装运行时依赖（见 base.txt 顶部说明：torch/ragas 等在 eval.txt）。
-# cache mount：pip 下载的 wheel 存在构建缓存里，重建时不用重新下载。
-# 双源：清华为主，阿里云兜底（单源限速时可以自动换）。
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install -r requirements/base.txt \
-      -i https://pypi.tuna.tsinghua.edu.cn/simple \
-      --extra-index-url https://mirrors.aliyun.com/pypi/simple/
+# 用 uv 装依赖：
+#   - pip 的解析器是纯 Python，依赖一多就 backtracking 到几分钟；
+#   - uv 是 Rust 实现，解析 + 并行下载通常几十秒。
+# 单源（阿里云）：双源会让每个包查两遍元数据，反而更慢。
+# cache mount：wheel 留在构建缓存，重建不重复下载。
+RUN pip install --no-cache-dir uv
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install -r requirements/base.txt \
+      -i https://mirrors.aliyun.com/pypi/simple/
 
 
 # ========== 第二阶段：运行阶段 ==========
