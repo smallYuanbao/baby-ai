@@ -61,8 +61,12 @@ services:
       chroma:
         condition: service_started
     networks:
-      - default
-      - ai-net
+      default: {}
+      # 给 evalflow 一个稳定别名：两个 compose 项目都有 backend 服务，
+      # 默认 DNS 会撞名（见 ecom 的 ecom-backend 同理）
+      ai-net:
+        aliases:
+          - baby-backend
     restart: unless-stopped
     mem_limit: 1g
     healthcheck:
