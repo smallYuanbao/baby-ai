@@ -1,4 +1,5 @@
 import subprocess
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, Request, File, UploadFile, Depends, HTTPException
@@ -20,11 +21,49 @@ from app.api.growth import router as growth_router
 from app.api.play import router as play_router
 from app.api.sessions import router as sessions_router
 from app.core.cost_tracker import cost_tracker
+from app.utils.logger import logger
 
 
 mcp_client = None
 
 app = FastAPI()
+
+
+def _warmup() -> None:
+    """启动预热：把冷启动成本从「第一个用户」挪到「服务启动时」。
+
+    实测冷/热差异：
+      - Ollama embedding：首次 2.96s → 后续 0.07s
+      - jieba 分词器：首次初始化 1.26s
+      - Chroma 首次查询也有额外开销
+    放在后台线程里做，不阻塞 /api/health，健康检查能立刻通过。
+    任何一步失败都只记日志，不影响服务启动。
+    """
+    try:
+        import jieba
+        jieba.initialize()
+        logger.info("[预热] jieba 完成")
+    except Exception as e:
+        logger.warning("[预热] jieba 失败：%s", e)
+
+    try:
+        from app.services.rag.embedding import get_embedding
+        get_embedding("热身")
+        logger.info("[预热] embedding 完成")
+    except Exception as e:
+        logger.warning("[预热] embedding 失败：%s", e)
+
+    try:
+        from app.services.rag.retriever import hybrid_search_rrf
+        hybrid_search_rrf("热身", top_k=1)
+        logger.info("[预热] 检索完成")
+    except Exception as e:
+        logger.warning("[预热] 检索失败：%s", e)
+
+
+@app.on_event("startup")
+def _on_startup() -> None:
+    threading.Thread(target=_warmup, name="warmup", daemon=True).start()
 
 def _client_ip(request: Request) -> str:
     """取真实客户端 IP。

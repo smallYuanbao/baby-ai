@@ -132,6 +132,14 @@ async def lifespan(app: FastAPI):
     # If no GPU is available, FlagEmbedding internally falls back to FP32 on CPU.
     reranker = FlagReranker(MODEL_NAME, use_fp16=True)
     logger.info("模型加载完成 ✅")
+
+    # 预热：首次推理要把权重页拉进内存，实测比后续慢 5~6 秒。
+    # 在启动时跑一次小规模打分，让第一个真实请求拿到的是热身后的耗时。
+    try:
+        reranker.compute_score([["热身", "这是一段用于预热模型的文本"]], normalize=True)
+        logger.info("预热完成 ✅")
+    except Exception as e:
+        logger.warning("预热失败（不影响服务）：%s", e)
     yield  # The application runs while suspended at yield.
     # ---- shutdown phase (after yield) ----
     logger.info("释放资源")
