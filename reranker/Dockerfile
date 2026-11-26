@@ -11,7 +11,7 @@ COPY requirements.txt .
 #   - 镜像从约 8–10GB 降到 2GB 左右
 #   - 构建时间显著缩短
 # 之后再装其余依赖时，pip 会认为 torch 已满足，不会重复下载。
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
+RUN pip install --no-cache-dir torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 COPY server.py .

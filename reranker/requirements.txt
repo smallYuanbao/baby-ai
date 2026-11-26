@@ -65,7 +65,8 @@ transformers==4.44.2
 # Deep-learning framework — required by both FlagEmbedding and the underlying
 # transformers library.  The reranker loads a transformer model; torch is the
 # default backend for inference.
-torch
+# 锁 2.5.1：2.15 的 CPU 推理在 Xeon E5 v4 上明显更慢（1.35s/条 → 2.3s/条）。
+torch==2.5.1
 
 # Numerical library — needed by torch and FlagEmbedding。
 # pyarrow / datasets 要求 NumPy >= 2.0；现代 torch / FlagEmbedding 已支持 2.x。
