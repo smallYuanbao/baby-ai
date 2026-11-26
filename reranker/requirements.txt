@@ -55,7 +55,12 @@ uvicorn[standard]
 # Cross-encoder / embedding model — wraps BGE-reranker-v2 and similar models
 # from BAAI.  Provides the `FlagReranker` class used to compute relevance
 # scores for each (query, document) pair.
-FlagEmbedding
+#
+# 必须锁版本：FlagEmbedding 1.4.2 仍引用 transformers 4.x 的
+# `transformers.modeling_attn_mask_utils`，transformers 5.x 已移除该模块，
+# 不锁会出现启动即崩（ModuleNotFoundError），然后静默降级到 LLM 排序。
+FlagEmbedding==1.4.2
+transformers>=4.44,<5
 
 # Deep-learning framework — required by both FlagEmbedding and the underlying
 # transformers library.  The reranker loads a transformer model; torch is the
