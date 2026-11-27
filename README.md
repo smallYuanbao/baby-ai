@@ -2,6 +2,12 @@
 
 基于 RAG + 意图路由的育儿知识 AI 聊天应用，具备多轮记忆和降级策略，用科学知识和温暖陪伴帮助父母解答育儿问题。
 
+> **在线体验**：<https://baby.da-dong.com>
+>
+> **评测闭环**：27 条盲测 correctness 0.975、库外题拒答 5/5，但 faithfulness 仅 0.16；
+> 定位到知识库覆盖缺口后两轮定向补库（2,100 → 3,004），同批回归 0.37；
+> 另建 25 条未补主题盲测：correctness 0.983、faithfulness 0.244，验证按主题补库不可泛化。
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/node-%E2%89%A520-green.svg)](https://nodejs.org/)
 [![React](https://img.shields.io/badge/react-18-61dafb.svg?logo=react)](https://react.dev/)
@@ -22,7 +28,7 @@
 | Agent | ReAct 循环 + MCP 工具调用 |
 | 嵌入 | Ollama + bge-m3 |
 | 向量库 | ChromaDB |
-| RAG管道 | 查询改写 → 意图路由 → 混合检索(Dense+Sparse) → 重排序 → 生成 |
+| RAG管道 | 查询改写 → 意图路由 → 混合检索(BM25 + Dense，RRF 融合) → BGE 精排 → 生成 |
 
 ## 功能特性
 
@@ -36,7 +42,7 @@
 
 ## 🐍 Python 后端（推荐）
 
-Python 版是 Express 版的完整重构，增加了意图路由、混合检索(RRF + 线性加权)、精排降级、Agent 工具调用、MCP 协议支持，并提供评估和基准测试工具链。
+Python 版是 Express 版的完整重构，增加了意图路由、混合检索（RRF，线性加权保留为对照）、精排降级、Agent 工具调用、MCP 协议支持，并提供评估和基准测试工具链。
 
 ### 快速开始
 
@@ -53,7 +59,7 @@ uvicorn app.main:app --reload --port 8010
 | 功能 | 说明 |
 |------|------|
 | 🧭 意图路由 | keyword + LLM 双层分诊，7 类意图自动识别 |
-| 🔀 混合检索 | RRF 排名融合 + 线性加权，Dense(语义) + Sparse(关键词) |
+| 🔀 混合检索 | RRF 排名融合；Dense(bge-m3) + BM25(jieba) 两路召回 |
 | 🎯 精排降级 | BGE Reranker → DeepSeek → 距离兜底，三级容错 |
 | 🤖 Agent | ReAct 决策循环 + function calling 工具调用 |
 | 🔌 MCP | Model Context Protocol 客户端，连接远程工具服务 |
@@ -150,7 +156,7 @@ npm install
 | 途径 | 状态 | 数量 | 质量 | 说明 |
 |------|------|------|------|------|
 | AI 自生成 | ✅ 已入库 | 15 条 | 高 | DeepSeek 出题+回答+自评，人工筛选 |
-| 中文医疗对话数据集 | ✅ 已入库 | 2015 条 | 中 | GitHub 开源数据，筛出儿科部分 |
+| 中文医疗对话数据集 | ✅ 已入库 | 3,004 条 | 中 | 初始 2,015 + 定向补库，覆盖长尾主题 |
 | 权威指南提炼 | ❌ 未做 | 0 | 最高 | AAP/中华医学会儿科 PDF → Q&A 灌库 |
 
 #### 途径 1：AI 自生成
@@ -194,7 +200,7 @@ ingest-medical-qa.ts
 | 集合名 | 来源 | 数量 | 灌库脚本 |
 |--------|------|------|----------|
 | `rag_samples` | AI 自生成 | 15 条 | `server/scripts/generate-samples.ts` |
-| `rag_medical` | 中文医疗数据集 | 2015 条 | `server/scripts/ingest-medical-qa.ts` |
+| `rag_medical` | 中文医疗数据集 | 3,004 条 | `scripts/ingest_balanced.py` + `scripts/ingest_topics.py` |
 
 **创建集合**（确保 Ollama 已启动，用于生成 embedding）：
 
@@ -202,7 +208,7 @@ ingest-medical-qa.ts
 # 集合 1：AI 自生成样本（15 条，需要 DeepSeek API Key）
 npx tsx server/scripts/generate-samples.ts
 
-# 集合 2：中文医疗对话数据（2015 条，需先下载数据集）
+# 集合 2：中文医疗对话数据（初始 2,015 条；再跑 scripts/ingest_topics.py 补长尾主题到 3,004）
 # 下载 Chinese-medical-dialogue-data，将 Pediatric_儿科/儿科5-14000.csv 放到 knowledge_base/
 npx tsx server/scripts/ingest-medical-qa.ts
 ```
