@@ -1,3 +1,3 @@
 # 旧版 Express 后端保留作对照，当前主实现是 python-server（FastAPI）。
 # 不把它计入语言统计，避免仓库主语言显示成 TypeScript。
-server/** linguist-detectable=false
+server/** linguist-vendored
